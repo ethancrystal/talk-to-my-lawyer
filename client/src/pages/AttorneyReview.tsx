@@ -24,7 +24,8 @@ export default function AttorneyReview() {
             <Link href="/" className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold">Get Your Free First Letter</Link>
           </div>
         </div>
-      </Footer>
-    </div>
+        <Footer />
+      </div>
+    </>
   );
 }
