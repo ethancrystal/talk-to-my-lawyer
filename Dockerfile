@@ -57,6 +57,7 @@ COPY drizzle/ ./drizzle/
 # into both the builder and production stages.
 COPY attached_assets/ ./attached_assets/
 COPY certs/ ./certs/
+COPY scripts/ ./scripts/
 COPY vite.config.ts tsconfig.json drizzle.config.ts components.json ./
 
 # Build: vite builds client → dist/public, esbuild bundles server → dist/index.js
