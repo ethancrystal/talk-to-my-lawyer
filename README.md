@@ -2,7 +2,7 @@
 
 AI-powered legal letter drafting with mandatory attorney review.
 
-> **For AI coding agents:** See [`AGENTS.md`](AGENTS.md) — the canonical agent reference covering tech stack, conventions, and critical gotchas.
+> **For AI coding agents:** Start with [`CLAUDE.md`](CLAUDE.md) for invariants and gotchas, then [`ARCHITECTURE.md`](ARCHITECTURE.md) for module map / status machine / tech stack. [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) covers day-to-day dev workflow.
 
 ---
 
@@ -10,12 +10,14 @@ AI-powered legal letter drafting with mandatory attorney review.
 
 | Document | Purpose |
 |----------|---------|
-| [`AGENTS.md`](AGENTS.md) | **Canonical agent reference** — tech stack, conventions, env vars, deployment |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Architecture — schema, routes, status machine, pipeline, module map |
-| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Feature inventory (Phases 1–110+) |
+| [`CLAUDE.md`](CLAUDE.md) | **Agent invariants** — always-loaded rules, critical gotchas, refactor landmarks |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **System reference** — tech stack, schema, status machine, pipeline, module map |
+| [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) | Developer workflow — module-move checklist, common pitfalls, testing |
 | [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md) | AI pipeline deep-dive (4-stage: OpenAI research → Claude Sonnet 4.5 draft/assembly → Claude Sonnet 4.6 vetting) |
 | [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) | Deployment checklist, account provisioning, env var matrix |
 | [`docs/ROLE_AREA_MATRIX.md`](docs/ROLE_AREA_MATRIX.md) | Role-based access matrix |
+| [`docs/FEATURE_MAP.md`](docs/FEATURE_MAP.md) | Feature inventory (Phases 1–110+) |
+| [`AGENTS.md`](AGENTS.md) | AI-retrieval discovery file (llms.txt-style — for ChatGPT/Perplexity/etc. to cite TTML) |
 | [`CONTENT-STRATEGY.md`](CONTENT-STRATEGY.md) | SEO content strategy, blog calendar |
 | [`todo.md`](todo.md) | Feature and bug tracking |
 
@@ -30,7 +32,7 @@ pnpm test           # run Vitest suite
 pnpm check          # TypeScript check (tsc --noEmit)
 ```
 
-> Full commands: See [`AGENTS.md` §4](AGENTS.md#4-build--development-commands).
+Validation gate before every PR: `pnpm check` → `pnpm test` → `pnpm build`.
 
 ---
 
@@ -44,7 +46,7 @@ pnpm check          # TypeScript check (tsc --noEmit)
 - **Email:** Resend
 - **AI Pipeline:** OpenAI `gpt-4o-search-preview` → Anthropic Claude Sonnet 4.5 (draft/assembly) → Claude Sonnet 4.6 (vetting)
 
-> Full stack details: [`AGENTS.md` §2](AGENTS.md#2-tech-stack).
+> Full stack details with versions: [`ARCHITECTURE.md` "Tech Stack"](ARCHITECTURE.md#tech-stack).
 
 ---
 
