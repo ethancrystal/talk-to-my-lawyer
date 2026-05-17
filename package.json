@@ -21,6 +21,7 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "db:check-migrations": "node scripts/check-migrations.mjs",
     "db:backfill-migrations": "node scripts/backfill-migrations.mjs",
+    "railway:install": "bash scripts/install-railway-cli.sh",
     "revalidate": "tsc --noEmit && vitest run && vite build",
     "test:e2e": "playwright test"
   },

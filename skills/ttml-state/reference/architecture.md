@@ -1,6 +1,6 @@
 # Architecture — Current State
 
-> **Last verified:** 2026-05-14 against `package.json`, `tsconfig.json`, `vite.config.ts`, top-level directory tree.
+> **Last verified:** 2026-05-17 against `package.json`, `tsconfig.json`, `vite.config.ts`, top-level directory tree, `server/spaRoutes.ts`, `server/_core/prerenderCache.ts`, and `scripts/prerender.ts`.
 
 TTML is a single TypeScript monorepo. One React 19 SPA frontend (Vite 8), one Express 4 + tRPC 11 backend, one PostgreSQL database on Supabase, one pg-boss queue, deployed to Railway as three Node services (web, worker, migrate) from one Docker image.
 
@@ -8,35 +8,35 @@ TTML is a single TypeScript monorepo. One React 19 SPA frontend (Vite 8), one Ex
 
 ## Tech stack
 
-| Layer | Technology | Version (from `package.json`) |
-|---|---|---|
-| Frontend framework | React | `^19.2.5` |
-| Build tool | Vite | `^8.0.10` |
-| Language | TypeScript | `5.9.3` (target `ESNext`, `moduleResolution: bundler`, `strict: true`, `allowImportingTsExtensions: true`) |
-| CSS | Tailwind CSS v4 (OKLCH theme) | `^4.2.4`, plugin `@tailwindcss/vite`, `@tailwindcss/typography`, `tw-animate-css` |
-| UI primitives | shadcn/ui on Radix UI | accordion, alert-dialog, avatar, dialog, dropdown-menu, label, progress, select, separator, slot, switch, tabs, tooltip |
-| Routing | wouter | `3.7.1` (patched — see `patches/wouter@3.7.1.patch`) |
-| Data fetching | TanStack Query v5 | `@tanstack/react-query ^5.96.1` (object form only — no positional `useQuery(['key'])`) |
-| Rich text | Tiptap 3 | `@tiptap/react`, `@tiptap/starter-kit`, plus highlight / placeholder / text-align / underline |
-| Animation | Framer Motion | `^12.38.0` |
-| Icons | `lucide-react` (actions), `react-icons/si` (company logos) |
-| Backend runtime | Node.js ≥ 22.12.0 | engines pin |
-| Backend framework | Express | `^4.21.2` |
-| RPC | tRPC | `^11.6.0` (client + server + react-query) with `superjson` serializer |
-| ORM | Drizzle | `^0.45.2`, drizzle-kit `^0.31.10` |
-| Database driver | `pg` (node-postgres) | `^8.20.0` |
-| Queue | pg-boss | `^12.18.2` (PostgreSQL-native, no Redis required for jobs) |
-| Auth | Supabase Auth | `@supabase/supabase-js ^2.105.1` |
-| Rate limit | Upstash Redis | `@upstash/ratelimit ^2.0.8`, `@upstash/redis ^1.37.0` |
-| Payments | Stripe | `^20.3.1` (`STRIPE_API_VERSION` pinned in stripe client) |
-| Email | Resend | `^6.12.2` (17 transactional templates) |
-| File storage | Cloudflare R2 | via `@aws-sdk/client-s3 ^3.1041.0`, `@aws-sdk/s3-request-presigner` |
-| PDF | PDFKit (server-side) + Puppeteer (`^24.42.0`) for HTML→PDF where needed |
-| LLMs | OpenAI SDK `^6.35.0`, Anthropic SDK `^0.92.0`, AI SDK adapters (`@ai-sdk/openai`, `@ai-sdk/anthropic`, top-level `ai ^6.0.168`), LangChain v1 (`@langchain/core`, `@langchain/anthropic`, `@langchain/openai`, `@langchain/langgraph`, `@langchain/langgraph-checkpoint-postgres`) |
-| Monitoring | Sentry (`@sentry/node`, `@sentry/react`) + Pino structured logger (`pino`, `pino-pretty`) |
-| Tests | Vitest `^4.1.5`, Playwright `^1.59.1`, vitest-coverage-v8 |
-| Package manager | pnpm `10.4.1+` (engines pin) |
-| Deployment | Railway (Docker multi-stage) |
+| Layer              | Technology                                                                                                                                                                                                                                                                         | Version (from `package.json`)                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Frontend framework | React                                                                                                                                                                                                                                                                              | `^19.2.5`                                                                                                               |
+| Build tool         | Vite                                                                                                                                                                                                                                                                               | `^8.0.10`                                                                                                               |
+| Language           | TypeScript                                                                                                                                                                                                                                                                         | `5.9.3` (target `ESNext`, `moduleResolution: bundler`, `strict: true`, `allowImportingTsExtensions: true`)              |
+| CSS                | Tailwind CSS v4 (OKLCH theme)                                                                                                                                                                                                                                                      | `^4.2.4`, plugin `@tailwindcss/vite`, `@tailwindcss/typography`, `tw-animate-css`                                       |
+| UI primitives      | shadcn/ui on Radix UI                                                                                                                                                                                                                                                              | accordion, alert-dialog, avatar, dialog, dropdown-menu, label, progress, select, separator, slot, switch, tabs, tooltip |
+| Routing            | wouter                                                                                                                                                                                                                                                                             | `3.7.1` (patched — see `patches/wouter@3.7.1.patch`)                                                                    |
+| Data fetching      | TanStack Query v5                                                                                                                                                                                                                                                                  | `@tanstack/react-query ^5.96.1` (object form only — no positional `useQuery(['key'])`)                                  |
+| Rich text          | Tiptap 3                                                                                                                                                                                                                                                                           | `@tiptap/react`, `@tiptap/starter-kit`, plus highlight / placeholder / text-align / underline                           |
+| Animation          | Framer Motion                                                                                                                                                                                                                                                                      | `^12.38.0`                                                                                                              |
+| Icons              | `lucide-react` (actions), `react-icons/si` (company logos)                                                                                                                                                                                                                         |
+| Backend runtime    | Node.js ≥ 22.12.0                                                                                                                                                                                                                                                                  | engines pin                                                                                                             |
+| Backend framework  | Express                                                                                                                                                                                                                                                                            | `^4.21.2`                                                                                                               |
+| RPC                | tRPC                                                                                                                                                                                                                                                                               | `^11.6.0` (client + server + react-query) with `superjson` serializer                                                   |
+| ORM                | Drizzle                                                                                                                                                                                                                                                                            | `^0.45.2`, drizzle-kit `^0.31.10`                                                                                       |
+| Database driver    | `pg` (node-postgres)                                                                                                                                                                                                                                                               | `^8.20.0`                                                                                                               |
+| Queue              | pg-boss                                                                                                                                                                                                                                                                            | `^12.18.2` (PostgreSQL-native, no Redis required for jobs)                                                              |
+| Auth               | Supabase Auth                                                                                                                                                                                                                                                                      | `@supabase/supabase-js ^2.105.1`                                                                                        |
+| Rate limit         | Upstash Redis                                                                                                                                                                                                                                                                      | `@upstash/ratelimit ^2.0.8`, `@upstash/redis ^1.37.0`                                                                   |
+| Payments           | Stripe                                                                                                                                                                                                                                                                             | `^20.3.1` (`STRIPE_API_VERSION` pinned in stripe client)                                                                |
+| Email              | Resend                                                                                                                                                                                                                                                                             | `^6.12.2` (17 transactional templates)                                                                                  |
+| File storage       | Cloudflare R2                                                                                                                                                                                                                                                                      | via `@aws-sdk/client-s3 ^3.1041.0`, `@aws-sdk/s3-request-presigner`                                                     |
+| PDF                | PDFKit (server-side) + Puppeteer (`^24.42.0`) for HTML→PDF where needed                                                                                                                                                                                                            |
+| LLMs               | OpenAI SDK `^6.35.0`, Anthropic SDK `^0.92.0`, AI SDK adapters (`@ai-sdk/openai`, `@ai-sdk/anthropic`, top-level `ai ^6.0.168`), LangChain v1 (`@langchain/core`, `@langchain/anthropic`, `@langchain/openai`, `@langchain/langgraph`, `@langchain/langgraph-checkpoint-postgres`) |
+| Monitoring         | Sentry (`@sentry/node`, `@sentry/react`) + Pino structured logger (`pino`, `pino-pretty`)                                                                                                                                                                                          |
+| Tests              | Vitest `^4.1.5`, Playwright `^1.59.1`, vitest-coverage-v8                                                                                                                                                                                                                          |
+| Package manager    | pnpm `10.4.1+` (engines pin)                                                                                                                                                                                                                                                       |
+| Deployment         | Railway (Docker multi-stage)                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -124,10 +124,10 @@ ttml-app/
 
 Set identically in `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`:
 
-| Alias | Resolves to |
-|---|---|
-| `@/*` | `client/src/*` |
-| `@shared/*` | `shared/*` |
+| Alias       | Resolves to         |
+| ----------- | ------------------- |
+| `@/*`       | `client/src/*`      |
+| `@shared/*` | `shared/*`          |
 | `@assets/*` | `attached_assets/*` |
 
 Do not modify `vite.config.ts`, `tsconfig.json`, or `drizzle.config.ts` without explicit user approval.
@@ -144,7 +144,7 @@ pnpm dev                     # NODE_ENV=development tsx watch server/_core/index
 pnpm check                   # tsc --noEmit (alias: pnpm lint)
 pnpm test                    # vitest run (~1300 tests across ~54 files)
 pnpm test:e2e                # playwright test
-pnpm build                   # vite build + esbuild server/worker/migrate/instrument
+pnpm build                   # vite build + esbuild server/worker/migrate/instrument + prerender
 pnpm start                   # NODE_ENV=production + dns ipv4first + sentry instrument + dist/index.js
 pnpm db:migrate              # node dist/migrate.js (after build)
 pnpm start:migrate           # migrate + start (production-like single-process)
@@ -159,13 +159,14 @@ pnpm revalidate              # full re-verification: check + test + vite build
 
 ### Build artifacts (esbuild → `dist/`)
 
-| Entry | Output |
-|---|---|
-| `server/_core/index.ts` | `dist/index.js` (web) |
-| `server/worker.ts` | `dist/worker.js` (pipeline worker) |
-| `server/migrate.ts` | `dist/migrate.js` (one-shot migrations) |
-| `server/instrument.ts` | `dist/instrument.js` (Sentry init, loaded via `--import`) |
-| `client/src` | `dist/public/` (static assets via `vite build`) |
+| Entry                   | Output                                                       |
+| ----------------------- | ------------------------------------------------------------ |
+| `server/_core/index.ts` | `dist/index.js` (web)                                        |
+| `server/worker.ts`      | `dist/worker.js` (pipeline worker)                           |
+| `server/migrate.ts`     | `dist/migrate.js` (one-shot migrations)                      |
+| `server/instrument.ts`  | `dist/instrument.js` (Sentry init, loaded via `--import`)    |
+| `client/src`            | `dist/public/` (static assets via `vite build`)              |
+| `scripts/prerender.ts`  | `dist/_prerender/` (static HTML for data-free public routes) |
 
 All built as ESM, externalizing `@tailwindcss/vite`, `@vitejs/plugin-react`, and `vite` (devDeps not needed at runtime).
 
@@ -175,16 +176,17 @@ All built as ESM, externalizing `@tailwindcss/vite`, `@vitejs/plugin-react`, and
 
 Single Docker image, dispatched by `docker-entrypoint.sh` based on the `PROCESS_TYPE` env var.
 
-| Role | `PROCESS_TYPE` | Command | Purpose |
-|---|---|---|---|
-| Web | `web` (default) | `node --import ./dist/instrument.js dist/index.js` | Express + tRPC + static client. Health: `/api/health`. |
-| Worker | `worker` | `node --import ./dist/instrument.js dist/worker.js` | pg-boss job consumer. Headless, no domain. |
-| Migrate | `migrate` | `node dist/migrate.js` | One-shot Drizzle migration runner. Restart policy = Never. |
-| (legacy) | `all` | runs migrate → background worker → web | Single-container local convenience mode |
+| Role     | `PROCESS_TYPE`  | Command                                             | Purpose                                                    |
+| -------- | --------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Web      | `web` (default) | `node --import ./dist/instrument.js dist/index.js`  | Express + tRPC + static client. Health: `/api/health`.     |
+| Worker   | `worker`        | `node --import ./dist/instrument.js dist/worker.js` | pg-boss job consumer. Headless, no domain.                 |
+| Migrate  | `migrate`       | `node dist/migrate.js`                              | One-shot Drizzle migration runner. Restart policy = Never. |
+| (legacy) | `all`           | runs migrate → background worker → web              | Single-container local convenience mode                    |
 
 Railway deploy order: migrate first → then web + worker.
 
 Local docker-compose:
+
 ```bash
 docker compose build
 docker compose run --rm migrate

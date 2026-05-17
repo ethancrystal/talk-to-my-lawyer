@@ -1,170 +1,147 @@
-# Ops & Deploy — Current State
+# Ops And Deploy - Current State
 
-> **Last verified:** 2026-05-14 against `package.json`, `Dockerfile` / `docker-compose.yml` / `docker-entrypoint.sh` (referenced), `AGENTS.md` §14, `docs/PRODUCTION_RUNBOOK.md` (referenced).
+> **Last verified:** 2026-05-17 against `package.json`, `server/_core/vite.ts`, `server/_core/prerenderCache.ts`, `scripts/prerender.ts`, `Dockerfile` / `docker-compose.yml` / `docker-entrypoint.sh` (referenced), `AGENTS.md`, and `docs/PRODUCTION_RUNBOOK.md` (referenced).
 
-One Docker image, three Railway services, one Postgres on Supabase, one Redis on Upstash (for rate limiting only — pg-boss queue lives in Postgres). Build is split into client (Vite) and four esbuild server bundles.
-
----
-
-## 1. Build pipeline
-
-`pnpm build` runs four passes in sequence (see `package.json`):
-
-```
-vite build                                                   → dist/public/   (static client)
-esbuild server/_core/index.ts  → dist/index.js                              (web server)
-esbuild server/worker.ts        → dist/worker.js                            (pg-boss worker)
-esbuild server/migrate.ts       → dist/migrate.js                           (one-shot migrations)
-esbuild server/instrument.ts    → dist/instrument.js                        (Sentry init, loaded with --import)
-```
-
-All esbuild bundles target Node (`--platform=node`), use `--format=esm`, bundle dependencies (`--bundle`), externalize `@tailwindcss/vite`, `@vitejs/plugin-react`, `vite` (devDeps only — not in runtime).
-
-Pre-deploy validation gate (mandatory): `pnpm check` → `pnpm test` → `pnpm build`.
+One Docker image, three Railway services, one Postgres on Supabase, one Redis on Upstash for rate limiting, and pg-boss jobs in Postgres. Build is split into the Vite client, four esbuild server bundles, and a best-effort prerender pass for static public pages.
 
 ---
 
-## 2. Docker entrypoint
+## 1. Build Pipeline
+
+`pnpm build` runs these passes in sequence:
+
+```
+vite build                                                    -> dist/public/
+esbuild server/_core/index.ts   --outdir=dist                -> dist/index.js
+esbuild server/instrument.ts    --outdir=dist                -> dist/instrument.js
+esbuild server/migrate.ts       --outdir=dist                -> dist/migrate.js
+esbuild server/worker.ts        --outdir=dist                -> dist/worker.js
+tsx scripts/prerender.ts                                      -> dist/_prerender/
+```
+
+All esbuild bundles target Node, use ESM, bundle dependencies, and externalize `@tailwindcss/vite`, `@vitejs/plugin-react`, and `vite`.
+
+Pre-deploy validation gate: `pnpm check` -> `pnpm test` -> `pnpm build`.
+
+---
+
+## 2. Public Prerendering
+
+- `scripts/prerender.ts` runs after the app build. It starts a temporary Express static server, opens each data-free public route with Puppeteer, waits for React/Helmet to settle, and writes full HTML to `dist/_prerender/`.
+- Routes currently prerendered: `/`, `/pricing`, `/faq`, `/terms`, `/privacy`, `/analyze`, `/services`, plus each `/services/<slug>` from `shared/serviceSlugs.ts`.
+- Blog routes are intentionally not Puppeteer-prerendered because they require DB-backed content. They use `server/spaRoutes.ts` fallback HTML from published post content.
+- If Chromium cannot launch, the script logs a warning and exits 0 after clearing stale output. The production server then falls back to SEO-injected SPA HTML.
+- Per-route prerender failures after Chromium launches fail the build.
+- Production loads `dist/_prerender/` at startup via `server/_core/prerenderCache.ts`. `server/_core/vite.ts` serves cached prerendered HTML first and sets `X-Prerender: 1`.
+
+---
+
+## 3. Docker Entrypoint
 
 `docker-entrypoint.sh` dispatches on `PROCESS_TYPE`:
 
-| `PROCESS_TYPE` | Command | Role |
-|---|---|---|
-| `web` (default) | `node --import ./dist/instrument.js dist/index.js` | Express + tRPC + static client. Listens on `PORT` (Railway sets it; defaults to 8080). Health at `/api/health` |
-| `worker` | `node --import ./dist/instrument.js dist/worker.js` | pg-boss pipeline-job consumer. No HTTP listener, no health check (Railway "worker" service has no domain) |
-| `migrate` | `node dist/migrate.js` | Drizzle migration runner. Exits when done. Restart policy = Never |
-| `all` (legacy) | `migrate` → background `worker` → foreground `web` | Single-container local convenience mode |
+| `PROCESS_TYPE` | Command                                             | Role                                                    |
+| -------------- | --------------------------------------------------- | ------------------------------------------------------- |
+| `web`          | `node --import ./dist/instrument.js dist/index.js`  | Express + tRPC + static client. Health at `/api/health` |
+| `worker`       | `node --import ./dist/instrument.js dist/worker.js` | pg-boss pipeline job consumer                           |
+| `migrate`      | `node dist/migrate.js`                              | Drizzle migration runner                                |
+| `all`          | migrate -> background worker -> web                 | Legacy single-container convenience                     |
 
-The `dns.setDefaultResultOrder("ipv4first")` call is made at the very top of `server/_core/index.ts` and `server/worker.ts` (also via `--dns-result-order=ipv4first` Node flag in `pnpm start`). Required because Railway's IPv6 egress fails against Supabase pooler IPs.
-
----
-
-## 3. Railway services
-
-Three services from the same repo / Docker image, distinguished by env vars:
-
-| Service | `PROCESS_TYPE` | Domain | Health | Restart policy |
-|---|---|---|---|---|
-| `ttml-app` | `web` | `talk-to-my-lawyer.com`, `www.talk-to-my-lawyer.com` | `/api/health` | Always |
-| `ttml-worker` | `worker` | none | none | Always |
-| `ttml-migrate` | `migrate` | none | none | Never (one-shot per deploy) |
-
-Deploy order: `ttml-migrate` first → on success, `ttml-app` + `ttml-worker`.
-
-`PORT` is set by Railway. Express respects the env var.
+`dns.setDefaultResultOrder("ipv4first")` is set at web/worker boot and via production Node flags to avoid Railway/Supabase IPv6 pooler issues.
 
 ---
 
-## 4. Local docker-compose
+## 4. Railway Services
 
-For local production-like runs:
+| Service        | `PROCESS_TYPE` | Domain                                               | Health        | Restart policy |
+| -------------- | -------------- | ---------------------------------------------------- | ------------- | -------------- |
+| `ttml-app`     | `web`          | `talk-to-my-lawyer.com`, `www.talk-to-my-lawyer.com` | `/api/health` | Always         |
+| `ttml-worker`  | `worker`       | none                                                 | none          | Always         |
+| `ttml-migrate` | `migrate`      | none                                                 | none          | Never          |
 
-```bash
-docker compose build
-docker compose run --rm migrate      # one-shot migrations
-docker compose up app worker         # start web + worker
-```
-
----
-
-## 5. Health endpoints
-
-Same data, three URLs (for proxy / load-balancer flexibility):
-- `GET /health`
-- `GET /api/health`
-- `GET /api/system/health` (tRPC also exposes `system.healthCheck`)
-
-Returns `{ ok: true, version, uptime }` when ready.
+Deploy order: `ttml-migrate` first, then `ttml-app` and `ttml-worker`.
 
 ---
 
-## 6. Security middleware (set in `server/_core/index.ts`)
+## 5. Static And SPA Serving
 
-| Header / config | Value / behaviour |
-|---|---|
-| `X-Frame-Options` | `DENY` |
-| `X-Content-Type-Options` | `nosniff` |
-| `Strict-Transport-Security` | Set in production only |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `Content-Security-Policy` | Set in production only — restricts scripts, styles, frames |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
-| `X-Robots-Tag` | `noindex` on auth/dashboard/API routes; `index,follow` on public marketing |
-| Body size limit | **12 MB** for JSON + urlencoded — accommodates legal-document uploads. Larger than typical Express defaults |
-
-### CORS allow-list
-
-Hard-coded plus env-augmented:
-
-- `https://talk-to-my-lawyer.com`, `https://www.talk-to-my-lawyer.com`
-- Any `*.railway.app`
-- Any `*.replit.dev`
-- `http://localhost:*` (dev only)
-- Plus comma-separated values from `CORS_ALLOWED_ORIGINS` env var
-
-### Stripe webhook raw-body
-
-`POST /api/stripe/webhook` is registered **before** `express.json()` so the signature check works on the raw payload. Don't reorder middleware.
+- Production serves `dist/public` through `express.static(distPath, { index: false })` so every HTML route goes through the prerender/SEO pipeline.
+- Missing assets and probe-looking paths are short-circuited by `shouldReturnAsset404`.
+- Known SPA routes resolve through `server/spaRoutes.ts`; unknown routes return HTTP 404 with a noindex shell.
+- Private app/auth/API routes get noindex policy via `X-Robots-Tag` and injected metadata.
 
 ---
 
-## 7. Rate limiting
+## 6. Security Middleware
 
-[`server/rateLimiter.ts`](../../../server/rateLimiter.ts) — Upstash Redis via `@upstash/ratelimit`:
+Set in `server/_core/index.ts`:
 
-| Scope | Limit | Failure mode |
-|---|---|---|
-| `/api/auth/login`, `/api/auth/signup`, `/api/auth/forgot-password` | 10 req / 15 min per IP | **Fail-closed** — denies all requests when Redis is unreachable |
-| `/api/trpc/*` general | 60 req / 1 min per session | Fail-open — allows when Redis is unreachable |
-| Sensitive mutations (`letters.submit`) | 5 / hour via `checkTrpcRateLimit` | Fail-open |
+| Header / config             | Behavior                                         |
+| --------------------------- | ------------------------------------------------ |
+| `X-Frame-Options`           | `DENY`                                           |
+| `X-Content-Type-Options`    | `nosniff`                                        |
+| `Strict-Transport-Security` | Production only                                  |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`                |
+| `Content-Security-Policy`   | Production only                                  |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()`       |
+| `X-Robots-Tag`              | Public pages indexable; private/auth/API noindex |
+| Body size limit             | 12 MB JSON/urlencoded                            |
 
-The auth endpoints are fail-closed deliberately — better to deny logins than to allow a brute-force attempt during a Redis outage.
-
----
-
-## 8. Background jobs / cron
-
-| Process | What it does | Schedule |
-|---|---|---|
-| pg-boss worker (`worker.ts`) | Consumes `runPipeline` jobs, runs the 4-stage pipeline | Continuous |
-| `cronScheduler.ts` | Schedules in-process crons via `node-cron` | Continuous |
-| `stalePipelineLockRecovery.ts` | Releases pipeline locks older than 15 minutes | Periodic |
-| `staleReviewReleaser.ts` | Auto-releases attorney reviews that have been unclaimed too long | Periodic |
-| `freePreviewEmailCron.ts` | Dispatches "your free preview is ready" emails when cooling window elapses; idempotent atomic claim on `free_preview_email_sent_at` | Every minute |
-| Fine-tune poller | Polls Vertex AI fine-tune job statuses | Every 30 min when GCP configured |
+Stripe webhook raw-body middleware must stay before `express.json()`.
 
 ---
 
-## 9. Webhook security
+## 7. Rate Limiting
 
-- **Stripe**: `stripe.webhooks.constructEvent` with `STRIPE_WEBHOOK_SECRET`. Idempotency via `processed_stripe_events` table (`.onConflictDoNothing()` on event `id`).
-- **n8n callback**: `timingSafeEqual` against `N8N_CALLBACK_SECRET` header `x-ttml-callback-secret`. Acknowledges with `{ received: true }` immediately, processes async.
-- **Email Worker, PDF Worker, Affiliate Worker**: each uses a Bearer token from the corresponding `*_SECRET` env var on the request to the Cloudflare Worker (server → CF), and is also required on inbound responses where applicable.
+`server/rateLimiter.ts` uses Upstash Redis:
 
----
-
-## 10. Logging + monitoring
-
-- **Pino structured logger** — JSON in production, `pino-pretty` in dev. Calling convention enforced by the project's ESLint flat config: merge-object first, e.g. `logger.error({ err, letterId }, "pipeline crashed")`.
-- **Sentry** — server (`@sentry/node` + `server/instrument.ts`) and client (`@sentry/react` initialized in `main.tsx`). Tracing + error capture. Set via `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
-- **Token usage / pipeline metrics** — stored in `workflow_jobs` rows; surfaced in `/admin/pipeline-analytics` and `/admin/quality-dashboard`.
+| Scope               | Limit                           | Failure mode |
+| ------------------- | ------------------------------- | ------------ |
+| Auth endpoints      | 10 requests / 15 min per IP     | Fail-closed  |
+| tRPC general        | 60 requests / 1 min per session | Fail-open    |
+| Sensitive mutations | 5 / hour                        | Fail-open    |
 
 ---
 
-## 11. Deploy procedure (high level)
+## 8. Background Jobs And Cron
 
-1. PR is opened → CI runs `pnpm check`, `pnpm test`, `pnpm build`.
-2. Merge to `main` → Railway picks up the commit.
-3. Railway builds the Docker image (once) and deploys to three services.
-4. `ttml-migrate` runs first — exits with code 0 on success.
-5. `ttml-app` and `ttml-worker` start with the new image.
-6. Health check on `/api/health` confirms the web service is up.
-7. Smoke test: see [`skills/platform-e2e-verification/SKILL.md`](../../platform-e2e-verification/SKILL.md) for the full lifecycle test.
-
-For account provisioning, env-var matrix, and pre-deploy checklist, the canonical source is [`docs/PRODUCTION_RUNBOOK.md`](../../../docs/PRODUCTION_RUNBOOK.md).
+- `server/worker.ts`: consumes pg-boss jobs.
+- `server/cronScheduler.ts`: schedules in-process cron jobs.
+- `stalePipelineLockRecovery.ts`: releases old pipeline locks.
+- `staleReviewReleaser.ts`: releases stale attorney reviews.
+- `freePreviewEmailCron.ts`: sends free-preview-ready emails idempotently.
+- Fine-tune poller: checks Vertex AI jobs when GCP env is configured.
 
 ---
 
-## 12. Specialist-skill cross-references
+## 9. Webhook Security
+
+- Stripe uses `stripe.webhooks.constructEvent` with `STRIPE_WEBHOOK_SECRET` and `processed_stripe_events` idempotency.
+- n8n callbacks use timing-safe comparison against `N8N_CALLBACK_SECRET`.
+- Cloudflare Email/PDF/Affiliate workers use Bearer secrets from their corresponding env vars.
+
+---
+
+## 10. Logging And Monitoring
+
+- Pino structured logger. ESLint enforces merge-object first: `logger.error({ err }, "message")`.
+- Sentry server/client instrumentation via `server/instrument.ts` and `client/src/lib/sentry.ts`.
+- Pipeline token usage and metrics are stored in `workflow_jobs` and surfaced in admin analytics.
+
+---
+
+## 11. Deploy Procedure
+
+1. PR runs `pnpm check`, `pnpm test`, `pnpm build`.
+2. Merge to `main`; Railway builds the Docker image.
+3. `ttml-migrate` runs first.
+4. `ttml-app` and `ttml-worker` start.
+5. Web health check hits `/api/health`.
+6. Smoke test the platform lifecycle; see `skills/platform-e2e-verification/SKILL.md`.
+
+---
+
+## 12. Specialist-Skill Cross-References
 
 - Deployment readiness: [`skills-audit/corrected/ttml-deployment-readiness/SKILL.md`](../../../skills-audit/corrected/ttml-deployment-readiness/SKILL.md)
 - Code review for production: [`skills-audit/corrected/ttml-code-review-qa/SKILL.md`](../../../skills-audit/corrected/ttml-code-review-qa/SKILL.md)
@@ -172,4 +149,4 @@ For account provisioning, env-var matrix, and pre-deploy checklist, the canonica
 
 ---
 
-**Sources read:** `package.json` scripts + dependencies, `AGENTS.md` §14–§15, `CLAUDE.md`, `ARCHITECTURE.md`. `Dockerfile` / `docker-compose.yml` / `docker-entrypoint.sh` referenced — re-verify before changing deploy contract.
+**Sources read:** `package.json`, `server/_core/vite.ts`, `server/_core/prerenderCache.ts`, `scripts/prerender.ts`, `AGENTS.md`, `CLAUDE.md`, `ARCHITECTURE.md`. Dockerfile / docker-compose / entrypoint referenced; re-verify before changing the deploy contract.
