@@ -15,7 +15,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
@@ -135,7 +135,11 @@ export async function runDraftingStage(
     pipelineCtx.ragAbGroup = ragAbGroup;
   }
 
-  const draftSystemPrompt = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
+  const draftSystemPromptText = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
+  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
+  // prefix is identical across retries and across letters of the same type, so
+  // subsequent calls within the 5-minute cache window pay reduced input token costs.
+  const draftSystemPrompt = withCacheControl(draftSystemPromptText);
   // Look up the target word count for this letter type from the shared config
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
