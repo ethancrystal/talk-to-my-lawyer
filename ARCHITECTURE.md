@@ -97,6 +97,8 @@ pipeline_failed -> submitted
 - `approved` is transient in normal review flow and forwards to `client_approval_pending`.
 - The `ai_draft` version is immutable; attorney edits create `attorney_edit` or `final_approved` versions.
 
+> **Paywall surface details** (which statuses gate server-side truncation, which modal renders in each UI state, free-trial vs paid CTAs): see [`CLAUDE.md` §5 Payment Gate](CLAUDE.md#core-architectural-invariants) — the canonical home for that story.
+
 ---
 
 ## Module Map
