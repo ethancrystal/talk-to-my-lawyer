@@ -248,13 +248,10 @@ Each piece of information lives in **exactly one place**. This table maps every 
 | Topic                                                       | Authoritative File                   | Scope                      |
 | ----------------------------------------------------------- | ------------------------------------ | -------------------------- |
 | Architecture, tech stack, module map, roles, status machine | `ARCHITECTURE.md` (this file)        | System-wide reference      |
-| Agent invariants + always-loaded critical gotchas           | `CLAUDE.md`                          | Auto-loaded every session  |
-| Developer workflow specifics, module-move checklist, refactor map | `docs/AGENT_GUIDE.md`           | Day-to-day dev reference   |
+| Agent behavioral rules, architectural invariant summaries   | `CLAUDE.md`                          | AI agent instructions      |
 | Architectural pattern enforcement rules                     | `skills/architectural-patterns/*.md` | Per-pattern detailed rules |
 | AI pipeline deep-dive (stages, RAG, resilience, n8n)        | `docs/PIPELINE_ARCHITECTURE.md`      | Pipeline-specific          |
-| Deployment + env-var matrix + account provisioning          | `docs/PRODUCTION_RUNBOOK.md`         | Operations / shipping      |
-| Per-role full access matrix                                 | `docs/ROLE_AREA_MATRIX.md`           | Auth / routes              |
+| Developer workflow, gotchas, conventions, common pitfalls   | `docs/AGENT_GUIDE.md`                | Day-to-day dev reference   |
 | Feature inventory (all phases)                              | `docs/FEATURE_MAP.md`                | What's been built          |
-| AI-retrieval discovery file (llms.txt-style)                | `AGENTS.md`                          | For ChatGPT/Perplexity/etc. to cite TTML — **not a developer reference** |
 | SEO content strategy, blog calendar, keyword map            | `CONTENT-STRATEGY.md`                | Marketing/content          |
 | Complete task and bug tracking (all phases)                 | `todo.md`                            | Historical task log        |
