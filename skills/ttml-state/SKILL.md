@@ -5,7 +5,7 @@ description: Canonical current-state map of the Talk-to-My-Lawyer (TTML) monorep
 
 # TTML State — Canonical Repository State Map
 
-> **Last verified:** 2026-05-15 against `HEAD` of branch `claude/elastic-lalande-3591a4` (most recent commit `974fef0`).
+> **Last verified:** 2026-05-17 against `main` (most recent commit `1d65ecb`).
 > **Sources of truth used:** `ARCHITECTURE.md`, `CLAUDE.md`, `docs/AGENT_GUIDE.md`, `package.json`, `shared/types/letter.ts`, `shared/pricing.ts`, `server/_core/env.ts`, `server/_core/trpc.ts`, `server/routers/_shared.ts`, `server/routers/index.ts`, `server/pipeline/providers.ts`, `server/pipeline/vetting/index.ts`, `server/pipeline/drafting.ts`, `server/pipeline/assembly.ts`, `server/pipeline/graph/nodes/*`, `drizzle/schema/{index,constants,letters,...}.ts`. Note: `AGENTS.md` is the project's AI-retrieval discovery file (llms.txt-style) — **not** a developer reference; do not consult it for tech stack, conventions, or gotchas.
 
 This skill is the **canonical state index** for TTML. Each reference file under [reference/](reference/) summarizes one domain, points at the authoritative source file, and links to the deeper specialist skill or doc.
@@ -31,6 +31,7 @@ Talk to My Lawyer (TTML, [`https://www.talk-to-my-lawyer.com`](https://www.talk-
 | Stripe / pricing / paywall / affiliate | [pricing-billing.md](reference/pricing-billing.md) |
 | Adding a page / changing routes / Tailwind v4 | [frontend.md](reference/frontend.md) |
 | Deploy, Docker, Railway, env config | [ops-deploy.md](reference/ops-deploy.md), [env-vars.md](reference/env-vars.md) |
+| Public SEO / crawler discoverability / prerendering | [frontend.md](reference/frontend.md), [ops-deploy.md](reference/ops-deploy.md) |
 | Writing tests / running E2E | [testing.md](reference/testing.md) |
 | Looking for an existing skill on TTML | [skills-index.md](reference/skills-index.md) |
 | Hit a contradiction between docs | [drift-log.md](reference/drift-log.md) |
@@ -89,6 +90,7 @@ These are the most-asked, most-drifted facts. Use these answers, not older docs:
 - **tRPC sub-routers** (14, composed in `server/routers/index.ts`): `system, auth, letters, review, admin, notifications, versions, billing, affiliate, profile, documents, blog, templates, intakeFormTemplates`.
 - **Schema** is split into 7 Drizzle modules under `drizzle/schema/`: `constants, users, letters, billing, notifications, pipeline, content`. The root `drizzle/schema.ts` is a barrel that re-exports them all.
 - **Validation gate** before every PR: `pnpm check` → `pnpm test` → `pnpm build`. Test suite is ~1300 tests across ~54 files.
+- **Crawler-facing public routes**: Express resolves known SPA routes through [`server/spaRoutes.ts`](../../server/spaRoutes.ts), injects per-route title/description/canonical/OG/Twitter tags, returns real 404s for unknown routes, and noindexes private app shells (via `NOINDEX_ROBOTS = "noindex, nofollow"`). `pnpm build` runs [`scripts/prerender.ts`](../../scripts/prerender.ts), which prerenders data-free public routes (`/`, `/pricing`, `/faq`, `/terms`, `/privacy`, `/analyze`, `/services`, `/services/*`) into `dist/_prerender/`; production loads them through [`server/_core/prerenderCache.ts`](../../server/_core/prerenderCache.ts) before falling back to SEO-injected SPA HTML. Blog post routes get crawler fallback HTML from published markdown / DB content. [`client/public/robots.txt`](../../client/public/robots.txt) implements `search=yes, ai-train=no` (training-only AI crawlers like GPTBot / Google-Extended / anthropic-ai / CCBot disallowed; retrieval bots like OAI-SearchBot / PerplexityBot / ClaudeBot allowed). [`client/public/llms.txt`](../../client/public/llms.txt) lists core pages, services, and selected posts with the Karish-Law-Firm trust frame for AI retrieval systems.
 
 ### Verified working flows (as of `974fef0`, 2026-05-14)
 
@@ -133,4 +135,5 @@ Re-verify against the live code (not against `AGENTS.md` or other skills) whenev
 | `server/routers/index.ts` or any sub-router | [api-surface.md](reference/api-surface.md) |
 | `server/_core/trpc.ts` or `server/routers/_shared.ts` | [auth-rbac.md](reference/auth-rbac.md) |
 | `client/src/App.tsx` or `client/src/pages/**` | [frontend.md](reference/frontend.md) |
+| `server/spaRoutes.ts`, `server/_core/vite.ts`, `server/_core/prerenderCache.ts`, `scripts/prerender.ts`, `client/public/robots.txt`, or `client/public/llms.txt` | [frontend.md](reference/frontend.md), [ops-deploy.md](reference/ops-deploy.md) |
 | `Dockerfile`, `docker-compose.yml`, `docker-entrypoint.sh` | [ops-deploy.md](reference/ops-deploy.md) |
