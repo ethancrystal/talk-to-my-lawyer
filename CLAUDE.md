@@ -114,19 +114,13 @@ Almost all client-server calls use tRPC v11. REST is **only** used for:
 
 ### Do Not Modify Without Cause
 
-`package.json` scripts (ask first), `vite.config.ts` (aliases/chunks/plugins pre-configured — do NOT add a proxy), `server/_core/vite.ts` (dev/prod server integration), `drizzle.config.ts` (pre-configured for Supabase), `tsconfig.json` (path aliases set).
+`package.json` scripts, `vite.config.ts`, `server/_core/vite.ts`, `drizzle.config.ts`, `tsconfig.json` — full list and rationale in [`AGENTS.md` §16](AGENTS.md#16-critical-gotchas-for-agents).
 
 ---
 
 ## Path Aliases
 
-Configured identically in `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`:
-
-| Alias | Resolves to |
-|---|---|
-| `@/*` | `client/src/*` |
-| `@shared/*` | `shared/*` |
-| `@assets/*` | `attached_assets/*` |
+Canonical table in [`AGENTS.md` §6](AGENTS.md#6-path-aliases) — `@/*` → `client/src/*`, `@shared/*` → `shared/*`, `@assets/*` → `attached_assets/*`.
 
 ---
 
@@ -150,11 +144,4 @@ Test files: `server/*.test.ts` (phase-numbered, e.g. `phase23.test.ts`). Run a s
 pnpm test -- server/phase67-pricing.test.ts
 ```
 
-Seeded via `scripts/seed-test-users.ts` (idempotent — safe to re-run; resets passwords and upserts DB records each run). Password for all four: `TestPass123!`.
-
-| Role | Email |
-|---|---|
-| subscriber | `test-subscriber@ttml.dev` |
-| employee | `test-employee@ttml.dev` |
-| attorney | `test-attorney@ttml.dev` |
-| admin | `test-admin@ttml.dev` |
+Seeded test credentials (subscriber / employee / attorney / admin at `@ttml.dev`, password `TestPass123!`) — see [`AGENTS.md` §12.4](AGENTS.md#124-test-credentials-seeded-via-scripts) for the full table.

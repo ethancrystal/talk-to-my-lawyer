@@ -6,7 +6,7 @@ description: Canonical current-state map of the Talk-to-My-Lawyer (TTML) monorep
 # TTML State — Canonical Repository State Map
 
 > **Last verified:** 2026-05-15 against `HEAD` of branch `claude/elastic-lalande-3591a4` (most recent commit `974fef0`).
-> **Sources of truth used:** `ARCHITECTURE.md`, `CLAUDE.md`, `docs/AGENT_GUIDE.md`, `package.json`, `shared/types/letter.ts`, `shared/pricing.ts`, `server/_core/env.ts`, `server/_core/trpc.ts`, `server/routers/_shared.ts`, `server/routers/index.ts`, `server/pipeline/providers.ts`, `server/pipeline/vetting/index.ts`, `server/pipeline/drafting.ts`, `server/pipeline/assembly.ts`, `server/pipeline/graph/nodes/*`, `drizzle/schema/{index,constants,letters,...}.ts`. Note: `AGENTS.md` is the project's AI-retrieval discovery file (llms.txt-style) — **not** a developer reference; do not consult it for tech stack, conventions, or gotchas.
+> **Sources of truth used:** `AGENTS.md`, `ARCHITECTURE.md`, `CLAUDE.md`, `package.json`, `shared/types/letter.ts`, `shared/pricing.ts`, `server/_core/env.ts`, `server/_core/trpc.ts`, `server/routers/_shared.ts`, `server/routers/index.ts`, `server/pipeline/providers.ts`, `server/pipeline/vetting/index.ts`, `server/pipeline/drafting.ts`, `server/pipeline/assembly.ts`, `server/pipeline/graph/nodes/*`, `drizzle/schema/{index,constants,letters,...}.ts`.
 
 This skill is the **canonical state index** for TTML. Each reference file under [reference/](reference/) summarizes one domain, points at the authoritative source file, and links to the deeper specialist skill or doc.
 
@@ -62,15 +62,15 @@ Each topic has exactly one authoritative file. Use this table to avoid duplicati
 | Topic | Owner |
 |---|---|
 | Current-state map of the repo (cross-cutting) | **This skill** (`skills/ttml-state/`) |
-| Agent invariants + always-loaded critical gotchas | [`CLAUDE.md`](../../CLAUDE.md) |
-| Architecture, tech stack, module map, status diagram, DB schema, tRPC router table, ownership index | [`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
+| Agent behavioural rules + invariants summary | [`CLAUDE.md`](../../CLAUDE.md) |
+| Canonical tech stack, conventions, gotchas (long form) | [`AGENTS.md`](../../AGENTS.md) |
+| Architecture, module map, status diagram, ownership index | [`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
 | Developer workflow + module-move checklist + day-to-day pitfalls | [`docs/AGENT_GUIDE.md`](../../docs/AGENT_GUIDE.md) |
 | Deep pipeline architecture (stages, RAG, resilience, n8n, LangGraph) | [`docs/PIPELINE_ARCHITECTURE.md`](../../docs/PIPELINE_ARCHITECTURE.md) |
 | Deployment + env-var matrix + account provisioning | [`docs/PRODUCTION_RUNBOOK.md`](../../docs/PRODUCTION_RUNBOOK.md) |
 | Per-feature inventory by phase number | [`docs/FEATURE_MAP.md`](../../docs/FEATURE_MAP.md) |
 | Per-role full access matrix | [`docs/ROLE_AREA_MATRIX.md`](../../docs/ROLE_AREA_MATRIX.md) |
 | Per-invariant enforcement rules | `skills/architectural-patterns/*.md` |
-| AI-retrieval discovery file (llms.txt-style) | [`AGENTS.md`](../../AGENTS.md) — **not** a developer reference, do not look there for tech stack / conventions |
 | Specialist deep-dives (pipeline-expert, security-review, etc.) | `skills-audit/corrected/ttml-*/SKILL.md` (see [skills-index.md](reference/skills-index.md)) |
 | End-to-end pipeline verification playbook | [`skills/platform-e2e-verification/SKILL.md`](../platform-e2e-verification/SKILL.md) |
 
