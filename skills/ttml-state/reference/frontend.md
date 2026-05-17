@@ -1,24 +1,22 @@
-# Frontend — Current State
+# Frontend - Current State
 
-> **Last verified:** 2026-05-14 against glob of `client/src/pages/**/*.tsx`, `client/src/App.tsx` (referenced), `client/src/index.css` (referenced), `package.json`, `vite.config.ts` (referenced).
+> **Last verified:** 2026-05-17 against `client/src/App.tsx`, glob of `client/src/pages/**/*.tsx`, `client/src/index.css`, `server/spaRoutes.ts`, `server/_core/vite.ts`, `server/_core/prerenderCache.ts`, `scripts/prerender.ts`, `client/public/robots.txt`, `client/public/llms.txt`, `package.json`, and referenced `vite.config.ts`.
 
-React 19 + Vite 8 SPA. wouter routing. Tailwind CSS v4 with OKLCH theme. shadcn/ui on Radix. tRPC + TanStack Query v5. No SSR — Vite static build → Express serves `dist/public`.
-
----
-
-## 1. Entry + routing
-
-- **Entry point**: [`client/src/main.tsx`](../../../client/src/main.tsx) — initializes Sentry, mounts `<App />`, wires the tRPC + TanStack Query providers, applies `ThemeContext`.
-- **Routes**: defined in [`client/src/App.tsx`](../../../client/src/App.tsx) via wouter `<Route>` / `<Switch>`. **Every new page must be registered here.** wouter does not auto-discover routes.
-- **Lazy loading**: pages use `React.lazy` wrapped in `lazyRetry` — a chunk-reload-recovery helper. Use the wrapper, not raw `lazy`, so chunk-load failures after a deploy don't permanently break the browser cache.
+React 19 + Vite 8 SPA. wouter routing. Tailwind CSS v4 with OKLCH theme. shadcn/ui on Radix. tRPC + TanStack Query v5. The user app is still client-rendered, but public crawler surfaces now get server-side SEO injection and build-time prerendered HTML for data-free marketing/service routes.
 
 ---
 
-## 2. Pages by role
+## 1. Entry And Routing
 
-Live as of glob 2026-05-14.
+- **Entry point:** [`client/src/main.tsx`](../../../client/src/main.tsx) initializes Sentry, mounts `<App />`, wires tRPC + TanStack Query providers, and applies `ThemeContext`.
+- **Routes:** [`client/src/App.tsx`](../../../client/src/App.tsx) defines all wouter `<Route>` / `<Switch>` routes. Every new page must be registered here.
+- **Lazy loading:** pages use `React.lazy` wrapped in `lazyRetry` for chunk reload recovery. Use the wrapper, not raw `lazy`.
 
-### Top-level / public
+---
+
+## 2. Pages By Role
+
+### Public
 
 ```
 Home.tsx
@@ -39,62 +37,41 @@ DocumentAnalyzer/
   AnalysisResults.tsx
 ```
 
-### Subscriber (`/dashboard` and sub-routes)
+### Subscriber
 
 ```
 subscriber/
-  Dashboard.tsx                  # composition shell — feature UI in components/subscriber/dashboard/
-  LetterDetail.tsx               # composition shell — status-specific UI in components/subscriber/letter-detail/
+  Dashboard.tsx
+  LetterDetail.tsx
   MyLetters.tsx
-  SubmitLetter.tsx               # multi-step intake entry
+  SubmitLetter.tsx
   intake-steps/
-    Step1LetterType.tsx
-    Step2Jurisdiction.tsx
-    Step3Parties.tsx
-    Step4Details.tsx
-    Step5Outcome.tsx
-    Step6Exhibits.tsx
-  IntakeFormTemplates.tsx        # user-defined custom intake form templates
+  IntakeFormTemplates.tsx
   TemplateGallery.tsx
   Billing.tsx
   Receipts.tsx
   Profile.tsx
 ```
 
-### Attorney (`/attorney`)
+### Attorney
 
 ```
 attorney/
   Dashboard.tsx
   ReviewQueue.tsx
   ReviewCentre.tsx
-  ReviewDetail/index.tsx         # composed from review/* sub-panels
+  ReviewDetail/index.tsx
   review/
-    ApproveDialog.tsx
-    ChangesDialog.tsx
-    RejectDialog.tsx
-    EditorToolbar.tsx
-    DiffPanel.tsx
-    HistoryPanel.tsx
-    IntakePanel.tsx
-    ResearchPanel.tsx
-    CitationAuditPanel.tsx
-    CounterArgumentPanel.tsx
 ```
 
-### Employee / Affiliate (`/employee`)
+### Employee / Affiliate
 
 ```
 employee/
   AffiliateDashboard/
-    index.tsx
-    AffiliateStatsCards.tsx
-    AffiliateEarningsSection.tsx
-    AffiliateReferralTools.tsx
-    AffiliateClickAnalytics.tsx
 ```
 
-### Admin (`/admin`)
+### Admin
 
 ```
 admin/
@@ -110,141 +87,104 @@ admin/
   QualityDashboard.tsx
   BlogEditor.tsx
   Affiliate/
-    index.tsx
-    AffiliateCodesTab.tsx
-    AffiliateCommissionsTab.tsx
-    AffiliatePayoutsTab.tsx
-    AffiliatePerformanceTab.tsx
-    AffiliateDialogs.tsx
-    EmployeeReferralDetails.tsx
   Learning/
-    index.tsx
-    LessonsTab.tsx
-    QualityTab.tsx
-    EffectivenessBadge.tsx
 ```
 
 ---
 
-## 3. Refactor landmarks (do not regress)
+## 3. Public SEO And Crawler Rendering
 
-From `CLAUDE.md`, verified against current code:
-
-- **`client/src/pages/subscriber/Dashboard.tsx`** is a composition shell. Feature UI lives in `client/src/components/subscriber/dashboard/`. Do not re-monolithize.
-- **`client/src/pages/subscriber/LetterDetail.tsx`** is a composition shell. Status-specific UI lives in `client/src/components/subscriber/letter-detail/`. This is the canonical subtree — do NOT recreate `pages/subscriber/letter-detail/`.
-- Several pages already use the modular `<name>/{index.tsx, sub-component.tsx}` pattern: `DocumentAnalyzer/`, `ReviewDetail/`, `AffiliateDashboard/`, `Learning/`, `Affiliate/`, `SubscriberLetterPreviewModal/`, `ReviewModal/`. Continue this pattern for new compound pages.
-- **Before splitting** a `*.ts` file into a `*/index.ts` subdirectory, read the Module Move Checklist in [`docs/AGENT_GUIDE.md`](../../../docs/AGENT_GUIDE.md) §1.14 — every relative import shifts one level deeper, and tests that grep on the old path break silently.
+- `server/spaRoutes.ts` is the source of truth for crawlable route metadata, canonical tags, real 404s, `X-Robots-Tag` policy, and fallback HTML injected into the SPA shell for JS-blind crawlers.
+- Public route metadata covers `/`, `/pricing`, `/analyze`, `/faq`, `/terms`, `/privacy`, `/blog`, `/services`, and each service slug from `shared/serviceSlugs.ts`.
+- `/blog/:slug` fallback HTML is generated from the published blog post body. `/blog` gets recent published post links. `/services` gets service links. `/services/:slug` gets per-service fallback copy.
+- `scripts/prerender.ts` runs during `pnpm build` after Vite/esbuild. It prerenders data-free public routes with Puppeteer into `dist/_prerender/`.
+- `server/_core/prerenderCache.ts` loads `dist/_prerender/*.html` at production startup. `server/_core/vite.ts` serves prerendered HTML first, otherwise falls back to `injectSeoIntoHtml`.
+- `client/public/robots.txt` uses `search=yes, ai-train=no`: retrieval/search/social/archive bots can reach public pages; training-only bots are blocked; app/API/auth routes are disallowed.
+- `client/public/llms.txt` lists core public pages, all service slugs from `shared/serviceSlugs.ts`, and selected blog posts.
+- Focused tests: `server/spaRoutes.test.ts` and `server/_core/prerender-cache.test.ts`.
 
 ---
 
-## 4. Routing rules (wouter, not React Router)
+## 4. Routing Rules
 
 ```ts
 import { Route, Switch, Link, useLocation } from "wouter";
 ```
 
-- Use `<Link href="/dashboard">` for navigation, not `<a>`.
-- `useLocation()` returns `[location, setLocation]` — note the destructure.
+- Use `<Link href="/dashboard">`, not plain `<a>`, for in-app navigation.
+- `useLocation()` returns `[location, setLocation]`.
 - For programmatic navigation: `const [, navigate] = useLocation(); navigate("/dashboard")`.
-- wouter is patched — see `patches/wouter@3.7.1.patch` for the modifications.
+- wouter is patched; see `patches/wouter@3.7.1.patch`.
 
 ---
 
-## 5. Tailwind CSS v4 (NOT v3)
+## 5. Tailwind CSS v4
 
-- **No `tailwind.config.js`.** All theme config lives in [`client/src/index.css`](../../../client/src/index.css) under `@theme inline` blocks.
-- **Colours use OKLCH format**, not hex or HSL. When defining CSS custom properties for colour values, use the space-separated `H S% L%` form **without** wrapping in `hsl(...)`.
-- **Dark mode** — `darkMode: ["class"]` semantics applied via `ThemeContext.tsx` toggling a class on `<html>`. Use the `dark:` variant for dark-specific overrides.
-- **Animations** — custom keyframes live in `index.css`: `animate-page-enter`, `hero-card-float`, `skeleton-crossfade`, etc.
-- Plugins: `@tailwindcss/typography` (for `.prose`), `tw-animate-css`.
-
----
-
-## 6. Component patterns
-
-### shadcn/ui
-
-UI primitives in [`client/src/components/ui/`](../../../client/src/components/ui/) — accordion, alert-dialog, avatar, button, card, dialog, dropdown-menu, input, label, progress, select, separator, sheet, switch, tabs, textarea, toast, tooltip, etc. Variants use `class-variance-authority` (CVA).
-
-### Icons
-
-- `lucide-react` for action / UI icons.
-- `react-icons/si` for company / brand logos.
-
-### `<SelectItem>` gotcha
-
-Radix `<SelectItem>` throws if `value` is missing or empty. Always provide a non-empty `value` prop.
-
-### Form pitfall
-
-If a form fails to submit silently, log `form.formState.errors` — most often it's a validation rule that wasn't surfaced.
-
-### Test IDs
-
-Every interactive element needs `data-testid` following the pattern `{action}-{target}` (e.g. `data-testid="submit-letter-form"`, `data-testid="approve-letter-button"`) or `{type}-{content}-{id}` for list items.
+- No `tailwind.config.js`; theme config lives in [`client/src/index.css`](../../../client/src/index.css) under `@theme inline`.
+- Colors use OKLCH. CSS custom color vars should use space-separated `H S% L%` values without wrapping in `hsl(...)`.
+- Dark mode is class-driven through `ThemeContext.tsx`; use explicit `dark:` variants.
+- Custom keyframes live in `index.css`: `animate-page-enter`, `hero-card-float`, `skeleton-crossfade`, etc.
 
 ---
 
-## 7. tRPC client
+## 6. Component Patterns
 
-[`client/src/lib/trpc.ts`](../../../client/src/lib/trpc.ts) sets up the client + TanStack Query integration. Patterns:
-
-```tsx
-// Query
-const { data, isLoading } = trpc.letters.myLetters.useQuery();
-
-// Query with input
-const { data } = trpc.letters.detail.useQuery({ id: letterId });
-
-// Mutation
-const submit = trpc.letters.submit.useMutation({
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: [["letters", "myLetters"]] });
-  },
-});
-submit.mutate({ /* input */ });
-```
-
-**No `import React`** — the Vite JSX transform handles it automatically. Adding `import React` is harmless but unnecessary.
+- shadcn/ui primitives live in [`client/src/components/ui/`](../../../client/src/components/ui/).
+- Icons: `lucide-react` for actions/UI; `react-icons/si` for company logos.
+- Radix `<SelectItem>` requires a non-empty `value`.
+- If a form silently fails, inspect `form.formState.errors`.
+- Every interactive element needs a `data-testid` following `{action}-{target}` or `{type}-{content}-{id}`.
 
 ---
 
-## 8. Realtime + streaming
+## 7. Refactor Landmarks
 
-- [`useLetterRealtime`](../../../client/src/hooks/useLetterRealtime.ts) — Supabase Realtime subscription to letter status changes. Powers the subscriber dashboard live updates.
-- [`useLetterStream`](../../../client/src/hooks/useLetterStream.ts) — streams `pipeline_stream_chunks` rows via Supabase Realtime for the LangGraph path. Surfaces tokens live in the UI.
-
----
-
-## 9. Vite manual chunks
-
-Configured in `vite.config.ts` — DO NOT duplicate or override:
-
-```
-vendor-tiptap, vendor-stripe, vendor-supabase, vendor-radix,
-vendor-pdf, vendor-ai, vendor-icons, vendor-react
-```
-
-Adding a heavy lib? Either group it into an existing vendor chunk or add a new named chunk for it.
+- `client/src/pages/subscriber/Dashboard.tsx` is a composition shell; feature UI lives in `client/src/components/subscriber/dashboard/`.
+- `client/src/pages/subscriber/LetterDetail.tsx` is a composition shell; status-specific UI lives in `client/src/components/subscriber/letter-detail/`.
+- Keep the existing modular `{index.tsx, sub-component.tsx}` pattern for compound pages.
+- Before moving a file to a subdirectory, read the Module Move Checklist in `docs/AGENT_GUIDE.md`.
 
 ---
 
-## 10. Common pitfalls
+## 8. tRPC Client
 
-- **`useAuth` path** — lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` segment). Not `client/src/hooks/useAuth.ts`.
-- **No Vite proxy** — Express + Vite are already integrated via [`server/_core/vite.ts`](../../../server/_core/vite.ts). Adding a proxy breaks the dev server.
-- **Env vars** — frontend must use `import.meta.env.VITE_*`, never `process.env`. `process` is undefined in browser context.
-- **Sentry init** — must be the first import in `main.tsx`. Don't reorder.
-- **PDF generation** — triggered on `clientApprove` (subscriber action), not when the attorney submits. The attorney `approve` mutation finalizes the version; the PDF render fires later when the subscriber confirms.
-- **Page registration** — every new page must be added to `App.tsx`. wouter doesn't auto-route.
+- Client setup: [`client/src/lib/trpc.ts`](../../../client/src/lib/trpc.ts).
+- TanStack Query v5 uses object form.
+- Invalidate query keys after mutations. Import `queryClient` from `@/lib/queryClient` where the local pattern uses it.
+- No `import React` is required because Vite handles the JSX transform.
 
 ---
 
-## 11. Specialist-skill cross-references
+## 9. Realtime And Streaming
+
+- [`useLetterRealtime`](../../../client/src/hooks/useLetterRealtime.ts) subscribes to Supabase Realtime letter status changes.
+- [`useLetterStream`](../../../client/src/hooks/useLetterStream.ts) streams `pipeline_stream_chunks` for the LangGraph path.
+
+---
+
+## 10. Vite Manual Chunks
+
+Configured in `vite.config.ts`: `vendor-tiptap`, `vendor-stripe`, `vendor-supabase`, `vendor-radix`, `vendor-pdf`, `vendor-ai`, `vendor-icons`, `vendor-react`.
+
+Do not add a Vite proxy; Express and Vite are already integrated in `server/_core/vite.ts`.
+
+---
+
+## 11. Common Pitfalls
+
+- `useAuth` lives at `client/src/_core/hooks/useAuth.ts`, not `client/src/hooks/useAuth.ts`.
+- Frontend env vars must be `VITE_*` and read through `import.meta.env`.
+- Sentry init must remain the first import in `main.tsx`.
+- PDF generation happens on subscriber `clientApprove`, not when the attorney approves.
+- New pages must be added to `App.tsx`; wouter does not auto-route.
+
+---
+
+## 12. Specialist-Skill Cross-References
 
 - UI design: [`skills-audit/corrected/ttml-ui-design-expert/SKILL.md`](../../../skills-audit/corrected/ttml-ui-design-expert/SKILL.md)
-- Routing: [`plugins/route-handle/skills/route-handle/SKILL.md`](../../../plugins/route-handle/skills/route-handle/SKILL.md) + `references/ttml-routing.md`
+- Routing: [`plugins/route-handle/skills/route-handle/SKILL.md`](../../../plugins/route-handle/skills/route-handle/SKILL.md)
 
 ---
 
-**Sources read:** glob of `client/src/pages/**/*.tsx`, `AGENTS.md` §10, `CLAUDE.md` (Refactor Landmarks, Critical Gotchas frontend section).
+**Sources read:** `client/src/App.tsx`, glob of `client/src/pages/**/*.tsx`, `server/spaRoutes.ts`, `server/_core/vite.ts`, `server/_core/prerenderCache.ts`, `scripts/prerender.ts`, `client/public/robots.txt`, `client/public/llms.txt`, `server/spaRoutes.test.ts`, `server/_core/prerender-cache.test.ts`, `AGENTS.md`, `CLAUDE.md`.
