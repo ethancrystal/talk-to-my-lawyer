@@ -1,8 +1,10 @@
 # TTML Agent Guide — Developer Workflow & Gotchas
 
-> **Last updated:** May 7, 2026
-> **Status:** Canonical — authoritative reference for developer workflows
-> **For project overview / tech stack / env vars:** See [`AGENTS.md`](../AGENTS.md)
+> **Last updated:** May 17, 2026
+> **Status:** Canonical for developer workflow (module-move checklist, refactor map, common pitfalls, testing, security)
+> **For invariants and the always-loaded gotcha list:** [`CLAUDE.md`](../CLAUDE.md)
+> **For tech stack / status machine / module map / DB schema / router table:** [`ARCHITECTURE.md`](../ARCHITECTURE.md)
+> **For env vars + deployment matrix:** [`docs/PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md)
 
 ---
 
@@ -15,7 +17,7 @@
 - `drizzle.config.ts` — pre-configured for Supabase PostgreSQL.
 - `tsconfig.json` — path aliases are set.
 
-> Full list of protected files: [`AGENTS.md` §16](../AGENTS.md#16-critical-gotchas-for-agents)
+Rationale for each: aliases/chunks/plugins are pre-configured (don't add a Vite proxy), `_core/vite.ts` handles dev↔prod server integration, `drizzle.config.ts` reads `SUPABASE_DATABASE_URL` and converts pooler port 6543 → direct 5432 for migrations.
 
 ### 1.2 Path Aliases
 
@@ -25,50 +27,17 @@
 | `@shared/*` | `shared/*` | vite.config.ts, tsconfig.json |
 | `@assets/*` | `attached_assets/*` | vite.config.ts |
 
-> Full path alias docs: [`AGENTS.md` §6](../AGENTS.md#6-path-aliases)
+Configured identically across `tsconfig.json`, `vite.config.ts`, and `vitest.config.ts` — do not modify in only one.
 
-### 1.3 Tailwind CSS v4 — NOT v3
-- There is NO `tailwind.config.js`. Configuration lives in `client/src/index.css` using `@theme inline` blocks.
-- Colors use OKLCH format, NOT hex/HSL.
-- Custom CSS properties for Tailwind must use `H S% L%` format (space-separated, percentages on S and L), WITHOUT wrapping in `hsl()`.
+### 1.3 Conventions — canonical inline in CLAUDE.md
 
-> Full Tailwind conventions: [`AGENTS.md` §5.3](../AGENTS.md#53-tailwind-css-v4)
+Tailwind v4 (OKLCH, `@theme inline`, no `tailwind.config.js`), tRPC v11 vs REST, TanStack Query v5 object-form, Drizzle `text().array()` and `server/db/` rule, Supabase JWT + 30s sync cache + `useAuth` `_core` path — all canonical inline in [`CLAUDE.md` "Critical Gotchas"](../CLAUDE.md). CLAUDE.md loads into every Claude Code session; read it there, not duplicated here.
 
-### 1.4 Status Machine
+**Dev-workflow specifics worth knowing on top of CLAUDE.md:**
 
-The source of truth is `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`.
-
-**GOTCHA:** Current flow uses a 24h hold before subscriber visibility: `drafting` usually transitions to `ai_generation_completed_hidden`, then to `letter_released_to_subscriber` / upsell statuses, then to `pending_review` after checkout/payment. `generated_locked` remains as a compatibility status and can still appear in legacy paths.
-
-> Full status machine: [`AGENTS.md` §11.4](../AGENTS.md#114-letter-status-machine)
-
-### 1.5 tRPC — NOT REST
-The app uses tRPC v11 for almost all client-server communication. REST is only used for webhooks, streaming, and health checks.
-
-**GOTCHA:** TanStack Query v5 ONLY allows object form: `useQuery({ queryKey: ['key'] })` — NOT `useQuery(['key'])`.
-
-**GOTCHA:** After mutations, ALWAYS invalidate cache by `queryKey`. Import `queryClient` from `@/lib/queryClient`.
-
-> Full tRPC patterns: [`AGENTS.md` §9](../AGENTS.md#9-api-patterns-trpc)
-
-### 1.6 Authentication Flow
-Auth is a HYBRID system:
-1. Supabase Auth handles JWT issuance and verification
-2. On every authenticated request, the server syncs the Supabase user to the local `users` table
-3. A 30-second in-memory cache prevents excessive DB lookups
-4. JWTs are read from the `Authorization` header OR `sb_session` cookie
-
-**GOTCHA:** The `useAuth` hook lives at `client/src/_core/hooks/useAuth.ts` (note the `_core` directory).
-
-> Full auth docs: [`AGENTS.md` §7](../AGENTS.md#7-authentication--authorization)
-
-### 1.7 Drizzle ORM Patterns
-- Schema is at `drizzle/schema.ts`, relations at `drizzle/relations.ts`
-- Use `text().array()` for array columns — NOT `array(text())`
-- Types are inferred: `typeof users.$inferSelect`
-- The data access layer is `server/db/` — all DB operations go through semantic functions here
-
-> Full Drizzle conventions: [`AGENTS.md` §8](../AGENTS.md#8-database--orm-patterns)
+- **Status machine, legacy path:** Current submissions go `drafting` → `ai_generation_completed_hidden` (24h hold) → upsell statuses → `pending_review`. `generated_locked` remains in `ALLOWED_TRANSITIONS` as a compatibility path — legacy letters may still appear in it on the way to `pending_review`. Diagram + rules: [`ARCHITECTURE.md` "Status Machine"](../ARCHITECTURE.md#status-machine-letter-lifecycle). Source of truth: [`shared/types/letter.ts`](../shared/types/letter.ts).
+- **Drizzle types are inferred:** use `typeof users.$inferSelect` for selects, `$inferInsert` for inserts. Insert validation via `createInsertSchema` from `drizzle-zod` with `.omit({ id: true, createdAt: true })`. Schema files: `drizzle/schema.ts` (barrel), `drizzle/relations.ts`.
+- **tRPC mutation invalidation pattern:** import `queryClient` from `@/lib/queryClient`, then `queryClient.invalidateQueries({ queryKey: [...] })` after every mutation. The default fetcher is pre-configured — do NOT define a custom `queryFn` on tRPC queries.
 
 ### 1.8 Pricing — Single Source of Truth
 All pricing lives in `shared/pricing.ts`. NEVER hardcode prices anywhere.
@@ -91,25 +60,22 @@ All env vars are accessed through `server/_core/env.ts` → `ENV` object.
 > Full env var matrix: [`docs/PRODUCTION_RUNBOOK.md`](PRODUCTION_RUNBOOK.md) §4  
 > Quick dev template: [`.env.example`](../.env.example)
 
-### 1.10 Frontend Gotchas
-- Do NOT explicitly `import React` — Vite's JSX transformer handles it automatically.
-- `useToast` is exported from `@/hooks/use-toast`.
-- `<SelectItem>` will throw if it has no `value` prop — always provide one.
-- If a form fails to submit silently, log `form.formState.errors`.
-- Pages use `React.lazy` with a `lazyRetry` wrapper for code splitting.
-- The app uses `wouter` (not React Router).
-- Every interactive element needs a `data-testid` attribute.
+### 1.10 Frontend gotchas (not in CLAUDE.md)
 
-> Full frontend patterns: [`AGENTS.md` §10](../AGENTS.md#10-frontend-patterns)
+CLAUDE.md "Critical Gotchas → Frontend" covers no-`import React`, wouter routing, `lazyRetry` page registration, `VITE_*` env vars, and `data-testid` pattern. On top of those:
+
+- `useToast` is exported from `@/hooks/use-toast` (note the path).
+- `<SelectItem>` will throw if `value` is missing or empty — always provide a non-empty `value` prop.
+- If a form fails to submit silently, log `form.formState.errors` — most often it's a validation rule that wasn't surfaced.
 
 ### 1.11 Rate Limiting
-Two layers:
-1. **Express middleware** (Upstash Redis): Auth endpoints = 10 req/15 min; tRPC = 60 req/1 min
-2. **tRPC-level** (`checkTrpcRateLimit`): Sensitive actions like letter submission = 5/hour
 
-If Upstash credentials are missing, rate limiting silently degrades (no crash).
+Two layers in [`server/rateLimiter.ts`](../server/rateLimiter.ts) using Upstash Redis:
 
-> Full rate limiting docs: [`AGENTS.md` §15.2](../AGENTS.md#152-rate-limiting)
+1. **Express middleware** — Auth endpoints (`/api/auth/login`, `/signup`, `/forgot-password`): 10 req / 15 min, **fail-closed** (denies when Redis is unreachable). General `/api/trpc/*`: 60 req / 1 min, fail-open.
+2. **tRPC-level** (`checkTrpcRateLimit`) — Sensitive mutations like `letters.submit`: 5 / hour, fail-open.
+
+If Upstash credentials are missing, the limiter silently degrades (no crash). Auth being fail-closed is deliberate — better to deny logins than to allow brute-force during a Redis outage.
 
 ### 1.12 Body Size Limit
 Express is configured with `express.json({ limit: "12mb" })` to accommodate large legal document uploads.
@@ -243,7 +209,14 @@ When extracting a sub-component out of a large React page (`pages/foo/Bar.tsx` �
 
 ### Test Credentials
 
-Four seeded accounts (subscriber / employee / attorney / admin at `@ttml.dev`) with password `TestPass123!`. Full table: [`AGENTS.md` §12.4](../AGENTS.md#124-test-credentials-seeded-via-scripts).
+Four seeded accounts at `@ttml.dev`, password `TestPass123!`:
+
+| Role | Email |
+|---|---|
+| subscriber | `test-subscriber@ttml.dev` |
+| employee | `test-employee@ttml.dev` |
+| attorney | `test-attorney@ttml.dev` |
+| admin | `test-admin@ttml.dev` |
 
 The seed script (`scripts/seed-test-users.ts`) is idempotent — safe to run repeatedly. It resets passwords and upserts DB records on each run.
 
@@ -267,7 +240,7 @@ The `ProtectedRoute` component enforces RBAC on all protected routes:
 - CORS, CSP, HSTS, XSS protection headers set in server middleware
 - Supabase RLS policies protect database-level access
 
-> Full security docs: [`AGENTS.md` §15](../AGENTS.md#15-security-considerations)
+Security headers (X-Frame-Options DENY, X-Content-Type-Options nosniff, Strict-Transport-Security in prod, CSP in prod, Permissions-Policy, X-Robots-Tag) are set in [`server/_core/index.ts`](../server/_core/index.ts). CORS allow-list: production domains + `*.railway.app` + `*.replit.dev` + `localhost` (dev) + `CORS_ALLOWED_ORIGINS` env var.
 
 ---
 
