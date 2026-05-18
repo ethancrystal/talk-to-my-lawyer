@@ -138,6 +138,13 @@ describe("Pipeline Orchestration", () => {
     process.env.ANTHROPIC_API_KEY = "test-key";
     process.env.OPENAI_API_KEY = "test-key";
     delete process.env.N8N_PRIMARY;
+    // PIPELINE_MODE=simple bypasses the n8n/LangGraph mocks and routes through
+    // runSimplePipeline → simple.ts, which talks to the SDK clients directly
+    // (not via the mocked pipeline/* modules). If a developer has
+    // PIPELINE_MODE=simple in their shell, that env leaks into the test
+    // process and every runFullPipeline call hits real OpenAI/Anthropic with
+    // "test-key" → 401. Clear it so the test exercises the intended path.
+    delete process.env.PIPELINE_MODE;
 
     mockCreateWorkflowJob.mockResolvedValue({ insertId: 1 });
     mockUpdateWorkflowJob.mockResolvedValue(undefined);
