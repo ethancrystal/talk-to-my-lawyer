@@ -333,6 +333,204 @@ describe("versions.get — subscriber blocked from non-preview ai_draft", () => 
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// Section 2b: versions.get — non-subscriber role gating (IDOR fix)
+//
+// Regression coverage for the role-aware access rules:
+//   - employee:  rejected unconditionally (affiliate-scope only)
+//   - admin:     full access (debugging / oversight)
+//   - attorney:  allowed iff assigned OR letter is `pending_review`
+//                OR letter is `client_revision_requested` AND unassigned
+//   - else:      defensive FORBIDDEN
+//
+// Mirrors the rule in server/routers/review/queue.ts:letterDetail so
+// versions.get cannot be used as a back-door around assignment checks.
+// ═══════════════════════════════════════════════════════════════════
+function makeAttorneyCtx(userId = 50): TrpcContext {
+  return {
+    user: {
+      id: userId,
+      role: "attorney",
+      openId: `att-${userId}`,
+      name: "Attorney A",
+      email: `attorney-${userId}@example.com`,
+      emailVerified: true,
+      freeReviewUsedAt: null,
+    },
+    req: { headers: { cookie: "" } } as any,
+    cookies: {},
+    setCookie: vi.fn(),
+    clearCookie: vi.fn(),
+  } as unknown as TrpcContext;
+}
+
+function makeEmployeeCtx(userId = 60): TrpcContext {
+  return {
+    user: {
+      id: userId,
+      role: "employee",
+      openId: `emp-${userId}`,
+      name: "Employee E",
+      email: `employee-${userId}@example.com`,
+      emailVerified: true,
+      freeReviewUsedAt: null,
+    },
+    req: { headers: { cookie: "" } } as any,
+    cookies: {},
+    setCookie: vi.fn(),
+    clearCookie: vi.fn(),
+  } as unknown as TrpcContext;
+}
+
+function makeAdminCtx(userId = 70): TrpcContext {
+  return {
+    user: {
+      id: userId,
+      role: "admin",
+      openId: `adm-${userId}`,
+      name: "Admin X",
+      email: `admin-${userId}@example.com`,
+      emailVerified: true,
+      freeReviewUsedAt: null,
+    },
+    req: { headers: { cookie: "" } } as any,
+    cookies: {},
+    setCookie: vi.fn(),
+    clearCookie: vi.fn(),
+  } as unknown as TrpcContext;
+}
+
+describe("versions.get — non-subscriber role gating (IDOR fix)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── employee branch ─────────────────────────────────────────────────────────
+  it("returns FORBIDDEN when an employee requests any version (affiliate-scope only)", async () => {
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    // Letter lookup intentionally not stubbed — employee path must reject
+    // before getLetterRequestById is called.
+
+    const caller = appRouter.createCaller(makeEmployeeCtx(60));
+
+    await expect(caller.versions.get({ id: 1 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(mockGetLetterRequestById).not.toHaveBeenCalled();
+  });
+
+  // ── admin branch ────────────────────────────────────────────────────────────
+  it("returns the version unconditionally when an admin requests it", async () => {
+    const version = makeVersion("ai_draft", 10);
+    mockGetLetterVersionById.mockResolvedValue(version);
+
+    const caller = appRouter.createCaller(makeAdminCtx(70));
+
+    const result = await caller.versions.get({ id: 1 });
+    expect(result.versionType).toBe("ai_draft");
+    expect(mockGetLetterRequestById).not.toHaveBeenCalled();
+  });
+
+  // ── attorney branch: allow paths ────────────────────────────────────────────
+  it("allows an attorney to view a version for a letter assigned to them", async () => {
+    const ATTORNEY_ID = 50;
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("under_review", 1),
+      assignedReviewerId: ATTORNEY_ID,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(ATTORNEY_ID));
+
+    const result = await caller.versions.get({ id: 1 });
+    expect(result.versionType).toBe("ai_draft");
+  });
+
+  it("allows an attorney to view a version when the letter is pending_review (unassigned, available to claim)", async () => {
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("pending_review", 1),
+      assignedReviewerId: null,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(50));
+
+    const result = await caller.versions.get({ id: 1 });
+    expect(result.versionType).toBe("ai_draft");
+  });
+
+  it("allows an attorney to view a version when the letter is client_revision_requested AND unassigned", async () => {
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("client_revision_requested", 1),
+      assignedReviewerId: null,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(50));
+
+    const result = await caller.versions.get({ id: 1 });
+    expect(result.versionType).toBe("ai_draft");
+  });
+
+  // ── attorney branch: deny paths (the actual IDOR fix) ───────────────────────
+  it("returns FORBIDDEN when an attorney requests a version for a letter assigned to a different attorney", async () => {
+    const REQUESTING_ATTORNEY = 50;
+    const OTHER_ATTORNEY = 51;
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("under_review", 1),
+      assignedReviewerId: OTHER_ATTORNEY,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(REQUESTING_ATTORNEY));
+
+    await expect(caller.versions.get({ id: 1 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("returns FORBIDDEN when an attorney requests a version for a client_revision_requested letter ASSIGNED to another attorney", async () => {
+    const REQUESTING_ATTORNEY = 50;
+    const OTHER_ATTORNEY = 51;
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("client_revision_requested", 1),
+      assignedReviewerId: OTHER_ATTORNEY,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(REQUESTING_ATTORNEY));
+
+    await expect(caller.versions.get({ id: 1 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("returns FORBIDDEN when an attorney requests a version for a letter in approved (not pending_review, not assigned, not client_revision_requested)", async () => {
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("final_approved", 10));
+    mockGetLetterRequestById.mockResolvedValue({
+      ...makeLetter("approved", 1),
+      assignedReviewerId: null,
+    });
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(50));
+
+    await expect(caller.versions.get({ id: 1 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
+  it("returns NOT_FOUND when an attorney requests a version for a letter that no longer exists (race / cleanup)", async () => {
+    mockGetLetterVersionById.mockResolvedValue(makeVersion("ai_draft", 10));
+    mockGetLetterRequestById.mockResolvedValue(null);
+
+    const caller = appRouter.createCaller(makeAttorneyCtx(50));
+
+    await expect(caller.versions.get({ id: 1 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // Section 3: letters.generateOrFetchPdf — only allowed after approval
 // ═══════════════════════════════════════════════════════════════════
 describe("letters.generateOrFetchPdf — status gate", () => {

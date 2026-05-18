@@ -40,24 +40,34 @@ export const reviewQueueRouter = router({
           unassigned: z.boolean().optional(),
           /** @deprecated Use review.myClaimed instead */
           myAssigned: z.boolean().optional(),
+          limit: z.number().int().positive().max(500).optional(),
+          offset: z.number().int().nonnegative().optional(),
         })
         .optional()
     )
     .query(async ({ ctx, input }) => {
       // Backward-compat: myAssigned still works
       if (input?.myAssigned)
-        return getAllLetterRequests({ assignedReviewerId: ctx.user.id });
+        return getAllLetterRequests({
+          assignedReviewerId: ctx.user.id,
+          limit: input?.limit,
+          offset: input?.offset,
+        });
 
       // Default: only unclaimed (pending_review) letters — oldest first (FIFO)
       if (!input?.status && !input?.unassigned)
         return getAllLetterRequests({
           status: "pending_review",
           orderDirection: "asc",
+          limit: input?.limit,
+          offset: input?.offset,
         });
 
       return getAllLetterRequests({
         status: input?.status,
         unassigned: input?.unassigned,
+        limit: input?.limit,
+        offset: input?.offset,
       });
     }),
 
@@ -68,9 +78,22 @@ export const reviewQueueRouter = router({
    * statuses: under_review, needs_changes, client_revision_requested, and any
    * other status that may be assigned to this reviewer.
    */
-  myClaimed: attorneyProcedure.query(async ({ ctx }) => {
-    return getAllLetterRequests({ assignedReviewerId: ctx.user.id });
-  }),
+  myClaimed: attorneyProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().positive().max(500).optional(),
+          offset: z.number().int().nonnegative().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      return getAllLetterRequests({
+        assignedReviewerId: ctx.user.id,
+        limit: input?.limit,
+        offset: input?.offset,
+      });
+    }),
 
   letterDetail: attorneyProcedure
     .input(z.object({ id: z.number() }))
@@ -80,11 +103,17 @@ export const reviewQueueRouter = router({
       // Admins can always view.
       // Attorneys can view if:
       //   (a) they are the assigned reviewer, OR
-      //   (b) the letter is pending_review (unassigned — available to claim)
+      //   (b) the letter is pending_review (unassigned — available to claim), OR
+      //   (c) the letter is client_revision_requested AND unassigned. `review.claim`
+      //       in actions.ts:55 already accepts this status for re-claiming after
+      //       the previous assignee unclaimed; without this branch the queue UI
+      //       could surface a claimable letter that 404s on detail.
       const canView =
         ctx.user.role === "admin" ||
         letter.assignedReviewerId === ctx.user.id ||
-        letter.status === "pending_review";
+        letter.status === "pending_review" ||
+        (letter.status === "client_revision_requested" &&
+          letter.assignedReviewerId == null);
       if (!canView)
         throw new TRPCError({
           code: "FORBIDDEN",
