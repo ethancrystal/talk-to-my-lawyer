@@ -44,7 +44,7 @@ import {
   withModelFailover,
 } from "../shared";
 import {
-  getAnthropicClient,
+  getVettingModel,
   getVettingModelFallback,
   createTokenAccumulator,
   accumulateTokens,
@@ -246,13 +246,13 @@ export async function runVettingStage(
   const userPrompt = baseUserPrompt + preVetBlock;
 
   const vettingTokens = createTokenAccumulator();
-  let vettingProvider = "anthropic";
-  let vettingModelKey = "claude-sonnet-4-6-20250514";
+  let vettingProvider = "openai";
+  let vettingModelKey = "gpt-4o";
 
   const generateVetting = async (errorFeedback?: string): Promise<string> => {
     // Reset provider to primary on each retry to avoid tier collapse
-    vettingProvider = "anthropic";
-    vettingModelKey = "claude-sonnet-4-6-20250514";
+    vettingProvider = "openai";
+    vettingModelKey = "gpt-4o";
     const promptWithFeedback = errorFeedback
       ? userPrompt + errorFeedback
       : userPrompt;
@@ -261,9 +261,8 @@ export async function runVettingStage(
         "Stage 4 (vetting retry)",
         letterId,
         async () => {
-          const anthropic = getAnthropicClient();
           const { text, usage: vettingUsage } = await generateText({
-            model: anthropic("claude-sonnet-4-6-20250514"),
+            model: getVettingModel(),
             system: systemPrompt,
             prompt: promptWithFeedback,
             maxOutputTokens: 16000,
@@ -273,8 +272,8 @@ export async function runVettingStage(
           return text;
         },
         async () => {
-          vettingProvider = "openai-failover";
-          vettingModelKey = "gpt-4o-mini";
+          vettingProvider = "anthropic-failover";
+          vettingModelKey = "claude-sonnet-4-6-20250514";
           const { text, usage: vettingUsage } = await generateText({
             model: getVettingModelFallback(),
             system: systemPrompt,
@@ -292,7 +291,7 @@ export async function runVettingStage(
         !pipelineCtx.qualityWarnings.some(w => w.startsWith("VETTING_FAILOVER"))
       ) {
         pipelineCtx.qualityWarnings.push(
-          `VETTING_FAILOVER: Switched to OpenAI GPT-4o-mini during vetting retry due to rate limit on primary model. Heightened attorney scrutiny recommended.`
+          `VETTING_FAILOVER: Switched to Anthropic Claude Sonnet 4.6 during vetting retry due to rate limit on the OpenAI primary model.`
         );
       }
     }
@@ -301,7 +300,7 @@ export async function runVettingStage(
 
   try {
     logger.info(
-      `[Pipeline] Stage 4: Claude vetting pass for letter #${letterId}`
+      `[Pipeline] Stage 4: OpenAI gpt-4o vetting pass for letter #${letterId}`
     );
 
     const { result: initialVettingText, failoverTriggered: vettingFailover } =
@@ -309,9 +308,8 @@ export async function runVettingStage(
         "Stage 4 (vetting)",
         letterId,
         () => {
-          const anthropic = getAnthropicClient();
           return generateText({
-            model: anthropic("claude-sonnet-4-6-20250514"),
+            model: getVettingModel(),
             system: systemPrompt,
             prompt: userPrompt,
             maxOutputTokens: 16000,
@@ -322,8 +320,8 @@ export async function runVettingStage(
           });
         },
         () => {
-          vettingProvider = "openai-failover";
-          vettingModelKey = "gpt-4o-mini";
+          vettingProvider = "anthropic-failover";
+          vettingModelKey = "claude-sonnet-4-6-20250514";
           return generateText({
             model: getVettingModelFallback(),
             system: systemPrompt,
@@ -338,7 +336,7 @@ export async function runVettingStage(
       );
     if (vettingFailover) {
       logger.warn(
-        `[Pipeline] Stage 4: Switched to OpenAI GPT-4o-mini failover for letter #${letterId} (provider=${vettingProvider})`
+        `[Pipeline] Stage 4: Switched to Anthropic Claude Sonnet 4.6 failover for letter #${letterId} (provider=${vettingProvider})`
       );
       if (pipelineCtx) {
         if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
@@ -348,7 +346,7 @@ export async function runVettingStage(
           )
         ) {
           pipelineCtx.qualityWarnings.push(
-            `VETTING_FAILOVER: Primary vetting model (Claude Sonnet) was rate-limited. Final quality vetting performed by OpenAI GPT-4o-mini. Claude's legal polish and tone review was not applied — heightened attorney scrutiny recommended.`
+            `VETTING_FAILOVER: Primary vetting model (OpenAI gpt-4o) was rate-limited. Final quality vetting performed by Anthropic Claude Sonnet 4.6 (same-tier fallback).`
           );
         }
       }
@@ -527,7 +525,7 @@ export async function runVettingStage(
         ),
         responsePayloadJson: {
           provider: vettingProvider,
-          failoverUsed: vettingProvider === "openai-failover",
+          failoverUsed: vettingProvider === "anthropic-failover",
           vettingReport: currentReport,
           bloatDetected: detectedBloat.length,
           preVetCitationAudit: {
@@ -585,7 +583,7 @@ export async function runVettingStage(
           ),
       responsePayloadJson: {
         provider: vettingProvider,
-        failoverUsed: vettingProvider === "openai-failover",
+        failoverUsed: vettingProvider === "anthropic-failover",
         vettingReport: currentReport,
         bloatDetected: detectedBloat.length,
         preVetCitationAudit: {

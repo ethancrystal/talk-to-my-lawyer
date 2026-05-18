@@ -88,9 +88,26 @@ export function getOpenAIClient() {
   return createOpenAI({ apiKey });
 }
 
-/** Returns true if OpenAI failover is available (API key is set) */
+/**
+ * Returns true if the OPENAI_API_KEY env var is set.
+ *
+ * After the 2026 provider flip (OpenAI primary, Anthropic fallback for drafting
+ * and assembly), this function checks PRIMARY availability for those two
+ * stages and FALLBACK availability for research (which kept OpenAI search as
+ * primary). Read it as "can we call OpenAI right now", not as "is the
+ * failover path available".
+ */
 export function isOpenAIFailoverAvailable(): boolean {
   const apiKey = process.env.OPENAI_API_KEY;
+  return !!(apiKey && apiKey.trim().length > 0);
+}
+
+/**
+ * Returns true if ANTHROPIC_API_KEY env var is set — i.e. the drafting /
+ * assembly fallback path is reachable.
+ */
+export function isAnthropicFailoverAvailable(): boolean {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   return !!(apiKey && apiKey.trim().length > 0);
 }
 
@@ -142,34 +159,77 @@ export function getResearchModelFallback(): {
   return null;
 }
 
-/** Stage 2: Anthropic claude-sonnet-4-5 — initial legal draft (direct Anthropic API) */
+/**
+ * Stage 2: OpenAI gpt-4o — initial legal draft (PRIMARY).
+ *
+ * gpt-4o is a top-tier general model with strong instruction-following on the
+ * lengthy structured prompts the drafting stage uses. Quality on legal-letter
+ * drafting is comparable to Claude Sonnet 4.5 at slightly lower per-token cost
+ * ($2.5/$10 vs $3/$15 per million). Claude is used as the high-quality fallback
+ * so a transient OpenAI outage doesn't drop quality to a small model.
+ */
 export function getDraftModel() {
-  const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-5-20250929");
+  const openai = getOpenAIClient();
+  return openai("gpt-4o");
 }
 
-/** Stage 2 failover: OpenAI gpt-4o-mini */
+/**
+ * Stage 2 failover: Anthropic claude-sonnet-4-5.
+ *
+ * Same-tier fallback (not a smaller model) — drafting is the quality-critical
+ * stage that the attorney later reviews, so we keep both tiers at top-tier
+ * quality. Cost asymmetry vs the primary is acceptable for a fallback path
+ * that should fire rarely.
+ */
 export function getDraftModelFallback() {
-  const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
-}
-
-/** Stage 3: Anthropic claude-sonnet-4-5 — final polished letter assembly (direct Anthropic API) */
-export function getAssemblyModel() {
   const anthropic = getAnthropicClient();
   return anthropic("claude-sonnet-4-5-20250929");
 }
 
-/** Stage 3 failover: OpenAI gpt-4o-mini */
-export function getAssemblyModelFallback() {
+/**
+ * Stage 3: OpenAI gpt-4o — final polished letter assembly (PRIMARY).
+ *
+ * Assembly is a polish pass over the Stage 2 draft — preserves citations and
+ * structure, tightens prose. gpt-4o handles this surgical-edit task well and
+ * stays consistent with the same provider used in Stage 2.
+ */
+export function getAssemblyModel() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
+  return openai("gpt-4o");
 }
 
-/** Stage 4 vetting failover: OpenAI gpt-4o-mini */
-export function getVettingModelFallback() {
+/** Stage 3 failover: Anthropic claude-sonnet-4-5 (matches Stage 2 fallback tier). */
+export function getAssemblyModelFallback() {
+  const anthropic = getAnthropicClient();
+  return anthropic("claude-sonnet-4-5-20250929");
+}
+
+/**
+ * Stage 4: OpenAI gpt-4o — final QA vetting pass (PRIMARY).
+ *
+ * After the 2026 provider flip, vetting matches Stages 2 & 3: OpenAI is
+ * primary, Anthropic is the same-tier fallback. Note that this means the
+ * drafter, polisher, AND vetter are all on the same provider family — if
+ * you want second-opinion independence at QA time, the previous
+ * configuration (Anthropic primary, OpenAI failover) was the right call
+ * and this can be reverted independently of Stages 2/3.
+ */
+export function getVettingModel() {
   const openai = getOpenAIClient();
-  return openai("gpt-4o-mini");
+  return openai("gpt-4o");
+}
+
+/**
+ * Stage 4 failover: Anthropic claude-sonnet-4-6 — same-tier QA fallback.
+ *
+ * Sonnet 4.6 is the model that previously held the vetting primary slot;
+ * preserved at the fallback tier so a transient OpenAI outage doesn't
+ * collapse vetting quality to a small/cheap model the way the prior
+ * gpt-4o-mini fallback did.
+ */
+export function getVettingModelFallback() {
+  const anthropic = getAnthropicClient();
+  return anthropic("claude-sonnet-4-6-20250514");
 }
 
 // ── Groq — free OSS last-resort fallback for all stages ──

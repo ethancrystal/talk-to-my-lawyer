@@ -210,6 +210,14 @@ const mocks = vi.hoisted(() => ({
     assembly: 0,
     vetting: 0,
   },
+  // Capture the system prompt each invocation/stream saw so tests can
+  // assert that data (e.g. vetting feedback on a redraft) actually flows
+  // between nodes rather than just being structurally present.
+  promptCapture: {
+    draftSystem: [] as string[],
+    assemblySystem: [] as string[],
+    vettingSystem: [] as string[],
+  },
   fetchCalls: 0,
   // Environment setup
   originalEnv: { ...process.env },
@@ -245,6 +253,7 @@ vi.mock("@langchain/anthropic", () => {
         const firstMsg = _messages[0];
         const sys = typeof firstMsg?.content === "string" ? firstMsg.content : "";
         if (sys.includes("senior attorney reviewing") || sys.includes("quality assurance")) {
+          mocks.promptCapture.vettingSystem.push(sys);
           mocks.llmCalls.vetting++;
           // Vetting scenario control
           if (mocks.vettingScenario === "error") {
@@ -269,6 +278,7 @@ vi.mock("@langchain/anthropic", () => {
         }
 
         // Assembly path
+        mocks.promptCapture.assemblySystem.push(sys);
         mocks.llmCalls.assembly++;
         return {
           content: "REFINED LETTER\n\nDear Bob,\n\nThis is a polished draft.\n\nSincerely,\nAlice",
@@ -282,6 +292,9 @@ vi.mock("@langchain/anthropic", () => {
 
     async *stream(_messages: any[], _options?: any): AsyncGenerator<any> {
       // Draft node uses streaming — emit 3 chunks then usage metadata.
+      const firstMsg = _messages[0];
+      const sys = typeof firstMsg?.content === "string" ? firstMsg.content : "";
+      mocks.promptCapture.draftSystem.push(sys);
       mocks.llmCalls.draft++;
       yield { content: "Dear Bob,\n\n" };
       yield { content: "Pursuant to California Civil Code § 1950.5, ", usage_metadata: undefined };
@@ -301,6 +314,9 @@ beforeEach(() => {
   mocks.llmCalls.draft = 0;
   mocks.llmCalls.assembly = 0;
   mocks.llmCalls.vetting = 0;
+  mocks.promptCapture.draftSystem = [];
+  mocks.promptCapture.assemblySystem = [];
+  mocks.promptCapture.vettingSystem = [];
   mocks.fetchCalls = 0;
   mocks.vettingScenario = "pass";
   mocks.dbCalls.updateLetterStatus = [];
@@ -381,6 +397,23 @@ vi.mock("./db", () => {
     updateLetterVersionPointers: vi.fn().mockImplementation(async (letterId: number, data: any) => {
       mocks.dbCalls.updateLetterVersionPointers.push({ letterId, data });
     }),
+    // finalize.ts's idempotency check + preview-gate.ts both call these.
+    // We return a letter with `freePreviewUnlockAt` set but NO
+    // `currentAiDraftVersionId` — so:
+    //   - Idempotency check sees a letter without a draft pointer → falls
+    //     through to write (so the test exercises the real finalize path).
+    //   - preview-gate's `isLetterPreviewGated` returns true → finalize
+    //     status resolves to `ai_generation_completed_hidden` (the post-#75
+    //     paywall funnel default expected by the integration assertions).
+    // Tests exercising the idempotent no-op path can override the spy.
+    getLetterRequestById: vi.fn().mockImplementation(async (letterId: number) => ({
+      id: letterId,
+      status: "drafting",
+      currentAiDraftVersionId: null,
+      submittedByAdmin: false,
+      freePreviewUnlockAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h out
+    })),
+    hasLetterBeenPreviouslyUnlocked: vi.fn().mockImplementation(async (_letterId: number) => false),
     getDb: vi.fn().mockImplementation(async () => {
       // Chainable Drizzle-like fake for letterVersions insert + letterRequests update
       // The hardening PR wraps these two writes in a db.transaction(), so the mock
@@ -419,6 +452,22 @@ vi.mock("./freePreviewEmailCron", () => ({
     return { status: "skipped", reason: "test" };
   }),
 }));
+
+// ── Mock the LangGraph checkpointer so tests don't try to hit Supabase ──
+// Without this, runLangGraphPipeline's getGraphWithCheckpointer() instantiates
+// a real PostgresSaver and calls setup(), which fails with ESSLREQUIRED in any
+// environment that has a Supabase DATABASE_URL set (i.e. every developer
+// machine). We swap in the in-memory saver — same interface, no network.
+vi.mock("./pipeline/graph/checkpointer", async () => {
+  const { MemorySaver } = await import("@langchain/langgraph");
+  let saver: any = null;
+  return {
+    getCheckpointer: async () => {
+      if (!saver) saver = new MemorySaver();
+      return saver;
+    },
+  };
+});
 
 // ── Import AFTER mocks are registered ──────────────────────────────
 import { runLangGraphPipeline } from "./pipeline/graph";
@@ -589,6 +638,44 @@ describe("runLangGraphPipeline — vetting retry loop", () => {
     // Metadata reflects the quality issue so attorneys see the warning.
     expect(mocks.dbCalls.letterVersionsInserts[0].metadataJson.qualityDegraded).toBe(true);
   });
+
+  // Coherence guard: when the loop runs, the redraft must SEE the prior
+  // vetting feedback. Without this, the loop is structurally present but
+  // functionally degenerate — the model would re-run blind with identical
+  // inputs and just hope for a better dice roll.
+  it("threads vetting feedback into the redraft prompt so the loop is actually self-correcting", async () => {
+    mocks.vettingScenario = "degrade-once";
+
+    await runLangGraphPipeline({
+      letterId: 203,
+      userId: 42,
+      intake: testIntake(),
+    });
+
+    // Two draft passes captured.
+    expect(mocks.promptCapture.draftSystem).toHaveLength(2);
+
+    const firstDraftPrompt = mocks.promptCapture.draftSystem[0];
+    const secondDraftPrompt = mocks.promptCapture.draftSystem[1];
+
+    // First attempt has no revision context (cold start).
+    expect(firstDraftPrompt).not.toContain("REVISION PASS");
+
+    // Second attempt MUST carry the prior draft + vetting feedback.
+    expect(secondDraftPrompt).toContain("REVISION PASS");
+    expect(secondDraftPrompt).toContain("attempt #2");
+    expect(secondDraftPrompt).toContain("Prior draft");
+    // The vetting mock flagged a jurisdiction issue ("Missing CA statute ref")
+    // on the first pass — the redraft prompt must surface it.
+    expect(secondDraftPrompt).toMatch(/Jurisdiction:.*Missing CA statute ref/);
+    expect(secondDraftPrompt).toContain("Weak citations"); // vetting summary
+
+    // The assembler on the second pass should also know it's a redraft
+    // so its polish can target the same issues.
+    expect(mocks.promptCapture.assemblySystem).toHaveLength(2);
+    expect(mocks.promptCapture.assemblySystem[0]).not.toContain("REVISION PASS");
+    expect(mocks.promptCapture.assemblySystem[1]).toContain("REVISION PASS");
+  });
 });
 
 describe("runLangGraphPipeline — failure path", () => {
@@ -648,16 +735,22 @@ describe("runLangGraphPipeline — failure path", () => {
 // ══════════════════════════════════════════════════════════════════
 
 describe("worker.ts — LANGGRAPH_PIPELINE env gate", () => {
-  it("worker.ts imports appGraph and checks process.env.LANGGRAPH_PIPELINE", async () => {
+  it("worker.ts imports the LangGraph entrypoint and reads LANGGRAPH_PIPELINE via parseLangGraphMode", async () => {
     const fs = await import("fs/promises");
     const path = await import("path");
     const src = await fs.readFile(
       path.join(process.cwd(), "server/worker.ts"),
       "utf8",
     );
-    expect(src).toContain("appGraph");
-    expect(src).toContain("streamEvents");
-    expect(src).toContain('process.env.LANGGRAPH_PIPELINE === "true"');
+    // The worker invokes the LangGraph pipeline via the public
+    // entrypoint, not the bare compiled graph — this is how it has
+    // worked since the langgraph.ts shim landed.
+    expect(src).toContain("runLangGraphPipeline");
+    // The env gate goes through parseLangGraphMode so the four modes
+    // (off/tier3/primary/canary) are honored; the literal env check is
+    // preserved for legacy LANGGRAPH_PIPELINE=true behavior.
+    expect(src).toContain("parseLangGraphMode");
+    expect(src).toContain("process.env.LANGGRAPH_PIPELINE");
   });
 
   it("worker.ts releases the lock after LangGraph completes and re-acquires for fallback", async () => {

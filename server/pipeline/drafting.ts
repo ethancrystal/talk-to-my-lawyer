@@ -152,8 +152,8 @@ export async function runDraftingStage(
   );
 
   const draftTokens = createTokenAccumulator();
-  let draftProvider = "anthropic";
-  let draftModelKey = "claude-sonnet-4-5-20250929";
+  let draftProvider = "openai";
+  let draftModelKey = "gpt-4o";
 
   const callGenerateText = async (prompt: string) => {
     const result = await generateText({
@@ -188,7 +188,7 @@ export async function runDraftingStage(
       letterId,
       async () => {
         const r = await generateText({
-          model: draftProvider === "openai-failover" ? getDraftModelFallback() : draftProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getDraftModel(),
+          model: draftProvider === "anthropic-failover" ? getDraftModelFallback() : draftProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getDraftModel(),
           system: draftSystemPrompt,
           prompt: promptWithFeedback,
           maxOutputTokens: 8000,
@@ -198,8 +198,8 @@ export async function runDraftingStage(
         return r;
       },
       async () => {
-        draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o-mini";
+        draftProvider = "anthropic-failover";
+        draftModelKey = "claude-sonnet-4-5-20250929";
         const r = await generateText({
           model: getDraftModelFallback(),
           system: draftSystemPrompt,
@@ -228,14 +228,14 @@ export async function runDraftingStage(
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFT_OSS_FALLBACK"))) {
         pipelineCtx.qualityWarnings.push(
-          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for draft retry (both Claude and OpenAI were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
+          `DRAFT_OSS_FALLBACK: Groq Llama 3.3 used as last-resort for draft retry (both OpenAI and Anthropic were unavailable). Legal tone and structure may differ significantly. Heightened attorney scrutiny required.`
         );
       }
     } else if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("DRAFTING_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `DRAFTING_FAILOVER: Switched to OpenAI GPT-4o-mini during draft retry due to rate limit on primary model.`
+          `DRAFTING_FAILOVER: Switched to Anthropic Claude Sonnet 4.5 during draft retry due to rate limit on the OpenAI primary model.`
         );
       }
     }
@@ -263,15 +263,15 @@ export async function runDraftingStage(
   };
 
   try {
-    draftLogger.info({ letterId }, "[Pipeline] Stage 2: Claude structured drafting starting");
+    draftLogger.info({ letterId }, "[Pipeline] Stage 2: OpenAI gpt-4o structured drafting starting");
 
     const { result: initialDraftResult, provider: initialDraftProvider, failoverTriggered: draftFailover } = await withModelFailover(
       "Stage 2 (drafting)",
       letterId,
       () => callGenerateText(draftUserPrompt),
       () => {
-        draftProvider = "openai-failover";
-        draftModelKey = "gpt-4o-mini";
+        draftProvider = "anthropic-failover";
+        draftModelKey = "claude-sonnet-4-5-20250929";
         return callGenerateTextFallback(draftUserPrompt);
       },
       async () => {
@@ -436,7 +436,7 @@ export async function runDraftingStage(
       metadataJson: {
         provider: draftProvider,
         stage: "draft_generation",
-        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
+        failoverUsed: draftProvider === "anthropic-failover" || draftProvider === "groq-oss-fallback",
         attorneyReviewSummary: draft.attorneyReviewSummary,
         openQuestions: draft.openQuestions,
         riskFlags: draft.riskFlags,
@@ -465,7 +465,7 @@ export async function runDraftingStage(
       responsePayloadJson: {
         versionId,
         provider: draftProvider,
-        failoverUsed: draftProvider === "openai-failover" || draftProvider === "groq-oss-fallback",
+        failoverUsed: draftProvider === "anthropic-failover" || draftProvider === "groq-oss-fallback",
         groundingReport: pipelineCtx?.groundingReport,
         consistencyReport: pipelineCtx?.consistencyReport,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "draft_generation"),

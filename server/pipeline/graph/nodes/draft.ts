@@ -5,7 +5,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
 import type { PipelineStateType } from "../state";
-import { breadcrumb, buildLessonsBlock, recordTokenUsage } from "../memory";
+import {
+  breadcrumb,
+  buildLessonsBlock,
+  buildRedraftContextBlock,
+  recordTokenUsage,
+} from "../memory";
 
 const log = createLogger({ module: "LangGraph:DraftNode" });
 
@@ -59,10 +64,28 @@ async function flushBufferToSupabase(
 export async function draftNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, researchPacket, researchUnverified, sharedContext } = state;
+  const {
+    letterId,
+    researchPacket,
+    researchUnverified,
+    sharedContext,
+    retryCount,
+    vettingReport,
+    assembledLetter: priorAssembledLetter,
+  } = state;
   const ctx = sharedContext.normalized;
   const lessons = sharedContext.lessons ?? [];
-  log.info({ letterId, jurisdiction: ctx.jurisdiction, letterType: ctx.letterType }, "[DraftNode] Starting draft stage");
+  const isRedraft = retryCount > 0 && Boolean(vettingReport);
+  log.info(
+    {
+      letterId,
+      jurisdiction: ctx.jurisdiction,
+      letterType: ctx.letterType,
+      retryCount,
+      isRedraft,
+    },
+    "[DraftNode] Starting draft stage",
+  );
 
   // Update letter status to 'drafting'
   await updateLetterStatus(letterId, "drafting");
@@ -84,12 +107,20 @@ export async function draftNode(
     ? "\n\nNOTE: Research was not web-grounded. Proceed with standard legal caution."
     : "";
   const lessonsBlock = buildLessonsBlock(lessons);
+  // On a redraft loop the model needs to see what failed last time —
+  // otherwise the loop runs blind and is just dice-rolling for a better
+  // pass. buildRedraftContextBlock returns "" for the first attempt.
+  const redraftBlock = buildRedraftContextBlock({
+    retryCount,
+    vettingReport,
+    priorDraft: priorAssembledLetter ?? "",
+  });
 
   const systemPrompt = `You are an expert legal letter writer. Draft professional, persuasive legal correspondence.
 Format: Formal legal letter with proper salutation, body paragraphs, and closing.
 Jurisdiction: ${ctx.jurisdiction}
 Letter type: ${ctx.letterType}
-${researchContext}${unverifiedWarning}${lessonsBlock}`;
+${researchContext}${unverifiedWarning}${lessonsBlock}${redraftBlock}`;
 
   const userPrompt = `Draft a ${ctx.letterType} legal letter with:
 Subject: ${ctx.subject}
@@ -165,7 +196,18 @@ ${ctx.additionalContext ? `Additional context: ${ctx.additionalContext}` : ""}`;
     await flushBufferToSupabase(supabase, letterId, buffer, sequenceNumber++, "draft_complete");
   }
 
-  log.info({ letterId, chars: fullContent.length, chunks: sequenceNumber, promptTokens, completionTokens }, "[DraftNode] Draft streaming completed");
+  log.info(
+    {
+      letterId,
+      chars: fullContent.length,
+      chunks: sequenceNumber,
+      promptTokens,
+      completionTokens,
+      isRedraft,
+      retryCount,
+    },
+    "[DraftNode] Draft streaming completed",
+  );
 
   return {
     assembledLetter: fullContent,
@@ -177,7 +219,7 @@ ${ctx.additionalContext ? `Additional context: ${ctx.additionalContext}` : ""}`;
       breadcrumbs: [
         breadcrumb(
           "draft",
-          `Draft streamed (${fullContent.length} chars, ${sequenceNumber} chunks, tokens=${promptTokens + completionTokens})`,
+          `Draft streamed (${fullContent.length} chars, ${sequenceNumber} chunks, tokens=${promptTokens + completionTokens}${isRedraft ? `, redraft #${retryCount}` : ""})`,
         ),
       ],
     } as any,
