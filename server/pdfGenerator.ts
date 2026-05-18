@@ -108,11 +108,7 @@ async function htmlToPdfBufferLocal(
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
-    // Puppeteer 24+ narrowed setContent's waitUntil to "load" | "domcontentloaded".
-    // "load" fires after stylesheets, images, fonts, and inline scripts finish —
-    // which is exactly what we need before page.pdf() to avoid rendering with
-    // un-loaded webfonts or images.
-    await page.setContent(html, { waitUntil: "load" });
+    await page.setContent(html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
