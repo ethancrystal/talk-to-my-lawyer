@@ -31,9 +31,21 @@ import {
 
 export const adminLettersProcedures = {
   allLetters: adminProcedure
-    .input(z.object({ status: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          status: z.string().optional(),
+          limit: z.number().int().positive().max(500).optional(),
+          offset: z.number().int().nonnegative().optional(),
+        })
+        .optional()
+    )
     .query(async ({ input }) =>
-      getAllLetterRequests({ status: input?.status })
+      getAllLetterRequests({
+        status: input?.status,
+        limit: input?.limit,
+        offset: input?.offset,
+      })
     ),
 
   getLetterDetail: adminProcedure

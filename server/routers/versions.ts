@@ -112,6 +112,7 @@ import {
   sendAttorneyWelcomeEmail,
   sendClientRevisionRequestEmail,
 } from "../email";
+import { logger } from "../logger";
 import { captureServerException } from "../sentry";
 import {
   enqueuePipelineJob,
@@ -279,6 +280,63 @@ export const versionsRouter = router({
     .query(async ({ ctx, input }) => {
       const version = await getLetterVersionById(input.id);
       if (!version) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Employees are affiliate-scope only — they never see letter content.
+      // Affiliate scope covers discount codes, commissions, and payouts, none of
+      // which require reading letter versions. Reject unconditionally.
+      if (ctx.user.role === "employee") {
+        logger.warn(
+          {
+            userId: ctx.user.id,
+            role: ctx.user.role,
+            versionId: input.id,
+            letterRequestId: version.letterRequestId,
+          },
+          "[versions.get] FORBIDDEN: employee attempted to read letter version"
+        );
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      // Admins always have full access (debugging, oversight, support).
+      if (ctx.user.role === "admin") {
+        return version;
+      }
+
+      // Attorneys can view a version only if:
+      //   (a) they are the assigned reviewer, OR
+      //   (b) the letter is unclaimed and in `pending_review`, OR
+      //   (c) the letter is `client_revision_requested` AND currently unassigned
+      //       (mirrors `review.claim`'s allow-list — see review/actions.ts:55).
+      // Mirrors review/queue.ts:letterDetail so versions.get can't be used as
+      // a back-door around the review-assignment check.
+      if (ctx.user.role === "attorney") {
+        const letter = await getLetterRequestById(version.letterRequestId);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        const canView =
+          letter.assignedReviewerId === ctx.user.id ||
+          letter.status === "pending_review" ||
+          (letter.status === "client_revision_requested" &&
+            letter.assignedReviewerId == null);
+        if (!canView) {
+          logger.warn(
+            {
+              userId: ctx.user.id,
+              role: ctx.user.role,
+              versionId: input.id,
+              letterRequestId: version.letterRequestId,
+              letterStatus: letter.status,
+              assignedReviewerId: letter.assignedReviewerId,
+            },
+            "[versions.get] FORBIDDEN: attorney attempted to read version for unassigned letter"
+          );
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You are not assigned to this letter",
+          });
+        }
+        return version;
+      }
+
       if (ctx.user.role === "subscriber") {
         // Subscribers can view final_approved versions always
         // They can also view ai_draft when the letter is generated_locked (paywall preview)
@@ -303,6 +361,16 @@ export const versionsRouter = router({
         }
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
-      return version;
+
+      // Defense in depth: unknown roles get denied.
+      logger.warn(
+        {
+          userId: ctx.user.id,
+          role: ctx.user.role,
+          versionId: input.id,
+        },
+        "[versions.get] FORBIDDEN: unknown role attempted to read letter version"
+      );
+      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
     }),
 });
