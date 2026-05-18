@@ -52,11 +52,7 @@ async function generatePresignedUrl(key: string): Promise<string> {
   const client = getR2Client();
   const bucket = getR2Bucket();
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-  // Known cross-package type drift between @aws-sdk/client-s3 and
-  // @aws-sdk/s3-request-presigner — both declare a private `handlers` property
-  // on Client, so structural equality fails even when the runtime contracts
-  // match. The cast is safe; presigner only invokes documented public methods.
-  return getSignedUrl(client as unknown as Parameters<typeof getSignedUrl>[0], command, { expiresIn: 3600 });
+  return getSignedUrl(client, command, { expiresIn: 3600 });
 }
 
 async function resolveUrl(key: string): Promise<string> {

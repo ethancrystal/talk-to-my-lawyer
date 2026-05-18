@@ -166,11 +166,8 @@ export const PAGE_CSS = `
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function buildApprovedHeaderHtml(data: LetterTemplateData): string {
-  // Per-page continuation header (page 2+). The full Karish Law Firm letterhead
-  // lives in the HTML body on page 1 — this just keeps the firm name visible
-  // across page breaks for multi-page approved letters.
   return `<div style="width:100%;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif;font-size:8pt;color:#64748b;display:flex;justify-content:space-between;align-items:center;padding:4px 64px;border-bottom:1px solid #e2e8f0;">
-    <div style="font-weight:700;color:#1e3a8a;letter-spacing:0.3px;">KARISH LAW FIRM</div>
+    <div style="font-weight:700;color:#1e3a8a;letter-spacing:0.3px;">TALK TO MY LAWYER</div>
     <div style="color:#94a3b8;">Letter #${data.letterId} &mdash; ${escHtml(data.subject)}</div>
   </div>`;
 }
@@ -184,7 +181,7 @@ export function buildDraftHeaderHtml(data: LetterTemplateData): string {
 
 export function buildApprovedFooterHtml(data: LetterTemplateData): string {
   return `<div style="width:100%;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#64748b;display:flex;justify-content:space-between;align-items:flex-start;padding:6px 64px 0;border-top:1px solid #e2e8f0;">
-    <div style="max-width:520px;line-height:1.5;"><span style="font-weight:700;color:#2563eb;">CONFIDENTIALITY NOTICE:</span> This communication is confidential and intended solely for the named addressee. Any unauthorized use, disclosure, or copying is strictly prohibited. Ref: #${data.letterId} &nbsp;&middot;&nbsp; &copy; ${new Date().getFullYear()} Karish Law Firm</div>
+    <div style="max-width:520px;line-height:1.5;"><span style="font-weight:700;color:#2563eb;">CONFIDENTIALITY NOTICE:</span> This communication is confidential and intended solely for the named addressee. Any unauthorized use, disclosure, or copying is strictly prohibited. Ref: #${data.letterId} &nbsp;&middot;&nbsp; &copy; ${new Date().getFullYear()} Talk to My Lawyer</div>
     <div style="white-space:nowrap;margin-left:16px;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
   </div>`;
 }
