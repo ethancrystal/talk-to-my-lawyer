@@ -2,7 +2,12 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import type { PipelineStateType } from "../state";
-import { breadcrumb, buildLessonsBlock, recordTokenUsage } from "../memory";
+import {
+  breadcrumb,
+  buildLessonsBlock,
+  buildRedraftContextBlock,
+  recordTokenUsage,
+} from "../memory";
 
 const log = createLogger({ module: "LangGraph:AssemblyNode" });
 
@@ -21,10 +26,21 @@ const ASSEMBLY_TIMEOUT_MS = 90_000;
 export async function assemblyNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, assembledLetter, researchPacket, sharedContext } = state;
+  const {
+    letterId,
+    assembledLetter,
+    researchPacket,
+    sharedContext,
+    retryCount,
+    vettingReport,
+  } = state;
   const ctx = sharedContext.normalized;
   const lessons = sharedContext.lessons ?? [];
-  log.info({ letterId, jurisdiction: ctx.jurisdiction }, "[AssemblyNode] Starting assembly stage");
+  const isRedraft = retryCount > 0 && Boolean(vettingReport);
+  log.info(
+    { letterId, jurisdiction: ctx.jurisdiction, retryCount, isRedraft },
+    "[AssemblyNode] Starting assembly stage",
+  );
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — assembly stage cannot proceed");
@@ -39,6 +55,15 @@ export async function assemblyNode(
     ? `Laws & statutes: ${JSON.stringify(researchPacket.laws ?? researchPacket.statutes ?? "N/A")}`
     : "No research packet available.";
   const lessonsBlock = buildLessonsBlock(lessons);
+  // On a redraft cycle the assembler should also know what vetting flagged
+  // last time so its polish targets those issues rather than running blind.
+  // We pass the assembler the CURRENT (fresh) draft, not the prior one —
+  // the redraft block only contributes the vetting feedback here.
+  const redraftBlock = buildRedraftContextBlock({
+    retryCount,
+    vettingReport,
+    priorDraft: "",
+  });
 
   const systemPrompt = `You are an expert legal editor. Your task is to refine and polish a legal letter draft.
 
@@ -49,7 +74,7 @@ Quality standards:
 4. Verify that the letter is persuasive and achieves the stated outcome
 5. Fix any grammatical or formatting issues
 
-Return ONLY the improved letter text. Do not include commentary or explanations.${lessonsBlock}`;
+Return ONLY the improved letter text. Do not include commentary or explanations.${lessonsBlock}${redraftBlock}`;
 
   const userPrompt = `Please refine this legal letter draft.
 
@@ -78,7 +103,17 @@ Desired outcome: ${ctx.desiredOutcome}`;
   const promptTokens = (result as any).usage_metadata?.input_tokens ?? 0;
   const completionTokens = (result as any).usage_metadata?.output_tokens ?? 0;
 
-  log.info({ letterId, chars: refinedContent.length, promptTokens, completionTokens }, "[AssemblyNode] Assembly completed");
+  log.info(
+    {
+      letterId,
+      chars: refinedContent.length,
+      promptTokens,
+      completionTokens,
+      isRedraft,
+      retryCount,
+    },
+    "[AssemblyNode] Assembly completed",
+  );
 
   return {
     assembledLetter: refinedContent,
@@ -90,7 +125,7 @@ Desired outcome: ${ctx.desiredOutcome}`;
       breadcrumbs: [
         breadcrumb(
           "assembly",
-          `Refined letter (${refinedContent.length} chars, tokens=${promptTokens + completionTokens})`,
+          `Refined letter (${refinedContent.length} chars, tokens=${promptTokens + completionTokens}${isRedraft ? `, redraft #${retryCount}` : ""})`,
         ),
       ],
     } as any,
