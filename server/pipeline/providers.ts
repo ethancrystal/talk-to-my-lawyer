@@ -20,6 +20,63 @@ export function getAnthropicClient() {
   return createAnthropic({ apiKey });
 }
 
+// ── Prompt caching helpers ──────────────────────────────────────────────────
+// Anthropic prompt caching (https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)
+// reduces input token costs by ~90% for repeated system prompts. The static
+// prefix of each system prompt (template + citation registry + lessons) is
+// tagged with cache_control: { type: "ephemeral" } so the API server caches it
+// for 5 minutes. Within that window, subsequent calls that share the same prefix
+// hit the cache and are billed at the reduced write-once / read-many rate.
+//
+// Two call-site patterns:
+//   1. Vercel AI SDK (`generateText`): pass `system` as an array of TextParts
+//      with `providerOptions.anthropic.cacheControl`.
+//   2. Raw `@anthropic-ai/sdk` (`messages.create`): pass `system` as an array
+//      of content blocks with `cache_control` on the last static block.
+
+/**
+ * Wraps a system prompt string for Vercel AI SDK `generateText` with
+ * Anthropic cache control. Returns a `SystemModelMessage` with
+ * providerOptions carrying the cache breakpoint.
+ *
+ * Usage:
+ *   generateText({ system: withCacheControl(systemPrompt), ... })
+ */
+export function withCacheControl(systemPrompt: string): {
+  role: "system";
+  content: string;
+  providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } };
+} {
+  return {
+    role: "system" as const,
+    content: systemPrompt,
+    providerOptions: {
+      anthropic: { cacheControl: { type: "ephemeral" as const } },
+    },
+  };
+}
+
+/**
+ * Wraps a system prompt string for the raw Anthropic SDK `messages.create`.
+ * Returns a `system` array with cache_control on the last block.
+ *
+ * Usage:
+ *   anthropic.messages.create({ system: withRawCacheControl(prompt), ... })
+ */
+export function withRawCacheControl(systemPrompt: string): Array<{
+  type: "text";
+  text: string;
+  cache_control: { type: "ephemeral" };
+}> {
+  return [
+    {
+      type: "text" as const,
+      text: systemPrompt,
+      cache_control: { type: "ephemeral" as const },
+    },
+  ];
+}
+
 // ── OpenAI — used as backup/failover model for all stages ──
 export function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;

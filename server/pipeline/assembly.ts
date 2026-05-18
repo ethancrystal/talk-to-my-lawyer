@@ -11,7 +11,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 
-import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl } from "./providers";
 
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock } from "./citations";
@@ -51,7 +51,11 @@ export async function runAssemblyStage(
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
   const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly", undefined, pipelineCtx);
-  const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
+  const assemblySystemText = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
+  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
+  // prefix is identical across retries, so subsequent calls within the 5-minute
+  // cache window pay reduced input token costs.
+  const assemblySystem = withCacheControl(assemblySystemText);
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
     : "";

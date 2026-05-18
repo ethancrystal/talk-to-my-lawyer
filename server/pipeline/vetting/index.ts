@@ -50,6 +50,7 @@ import {
   accumulateTokens,
   calculateCost,
   MODEL_PRICING,
+  withCacheControl,
 } from "../providers";
 import {
   validateFinalLetter,
@@ -225,9 +226,13 @@ export async function runVettingStage(
     undefined,
     pipelineCtx
   );
-  const systemPrompt =
+  // Wrap in Anthropic prompt caching — the vetting system prompt (5KB+) is the
+  // largest static prefix in the pipeline. On retry loops (up to 2 retries) the
+  // cache saves ~90% of input token cost for the repeated system block.
+  const systemPrompt = withCacheControl(
     buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) +
-    lessonsBlockVetting;
+    lessonsBlockVetting
+  );
   const baseUserPrompt = buildVettingUserPrompt(
     assembledLetter,
     intake,

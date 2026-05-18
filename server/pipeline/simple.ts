@@ -2,6 +2,7 @@ import type { IntakeJson } from "../../shared/types";
 import { createLogger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
 import { OpenAI } from "openai";
+import { withRawCacheControl } from "./providers";
 import {
   updateLetterStatus,
   createLetterVersion,
@@ -69,19 +70,47 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Static system prompt for simple pipeline — cached via Anthropic prompt caching.
+// This prefix is identical across all simple-pipeline calls, so the API server
+// caches it for 5 minutes and subsequent calls within the window pay reduced
+// input token costs (~90% savings on the system block).
+const SIMPLE_SYSTEM_PROMPT = `You are a professional legal letter writer. Generate a formal legal letter based on the user's information.
+
+The letter should:
+1. Use proper legal formatting (date, recipient address, salutation, body, closing, signature block)
+2. Be clear, concise, and professional
+3. Address the core issue(s) described
+4. Suggest appropriate next steps or remedies
+5. Be formatted in plain text (not markdown)
+
+Output only the letter content, ready to send.`;
+
 /**
  * Try Claude first, then fall back to OpenAI.
+ *
+ * Uses Anthropic prompt caching on the system prompt — the static instructions
+ * are tagged with cache_control: { type: "ephemeral" } so repeated calls within
+ * a 5-minute window hit the cache and pay reduced input token costs.
  */
 async function generateLetter(prompt: string): Promise<GenerationResult> {
   try {
     const message = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 4096,
+      system: withRawCacheControl(SIMPLE_SYSTEM_PROMPT),
       messages: [{ role: "user", content: prompt }],
     });
 
     const content =
       message.content[0]?.type === "text" ? message.content[0].text : "";
+
+    logger.info(
+      {
+        cacheCreation: (message.usage as any)?.cache_creation_input_tokens,
+        cacheRead: (message.usage as any)?.cache_read_input_tokens,
+      },
+      "[Simple] Claude prompt cache stats"
+    );
 
     return {
       content,
@@ -90,6 +119,10 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
       usage: {
         inputTokens: message.usage?.input_tokens,
         outputTokens: message.usage?.output_tokens,
+      },
+      metadata: {
+        cacheCreationTokens: (message.usage as any)?.cache_creation_input_tokens,
+        cacheReadTokens: (message.usage as any)?.cache_read_input_tokens,
       },
     };
   } catch (claudeErr) {
@@ -101,7 +134,10 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
     const completion = await openai.chat.completions.create({
       model: OPENAI_MODEL,
       max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: SIMPLE_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
     });
 
     const content = completion.choices[0]?.message?.content ?? "";
@@ -273,9 +309,9 @@ function buildPrompt(intake: IntakeJson): string {
     additionalContext,
   } = intake;
 
-  return `You are a professional legal letter writer. Generate a formal legal letter based on the following information:
-
-**Letter Type:** ${matter?.category || "General Legal Matter"}
+  // The static instructions now live in SIMPLE_SYSTEM_PROMPT (cached).
+  // This user prompt contains only the per-letter dynamic data.
+  return `**Letter Type:** ${matter?.category || "General Legal Matter"}
 **Subject:** ${matter?.subject || "N/A"}
 **Description:** ${matter?.description || "N/A"}
 
@@ -295,15 +331,7 @@ function buildPrompt(intake: IntakeJson): string {
 **Desired Outcome:** ${desiredOutcome || "N/A"}
 **Additional Context:** ${additionalContext || "None"}
 
-Generate a comprehensive, professional legal letter addressing the matter described above. 
-The letter should:
-1. Use proper legal formatting (date, recipient address, salutation, body, closing, signature block)
-2. Be clear, concise, and professional
-3. Address the core issue(s) described
-4. Suggest appropriate next steps or remedies
-5. Be formatted in plain text (not markdown)
-
-Output only the letter content, ready to send.`;
+Generate a comprehensive, professional legal letter addressing the matter described above.`;
 }
 
 export async function runSimplePipeline(
