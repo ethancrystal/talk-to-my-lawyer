@@ -90,6 +90,11 @@ ${researchSummary}`;
     stage: "vetting",
     tier: "lite",
     temperature: 0,
+    // Stage 4 (Vetting) canonical Anthropic model per the 4-stage pipeline
+    // convention — sonnet-4-6 distinct from assembly's sonnet-4-5. The lite-tier
+    // default (claude-haiku-4-5) is too small for the quality-attorney persona;
+    // when OpenAI is unavailable we want the more capable Sonnet here.
+    anthropicModel: "claude-sonnet-4-6-20250514",
   });
 
   const rawContent = result.content;
@@ -97,11 +102,14 @@ ${researchSummary}`;
   // Parse vetting report. On parse failure we used to default to a passing
   // report (score=7, qualityDegraded=false) — that's fail-OPEN and lets bad
   // letters slip through silently. Switch to a parse-failure report that
-  // surfaces a clear quality warning so attorneys see the unknown-quality
-  // state in the UI without forcing an infinite retry loop.
+  // surfaces a clear quality warning. qualityDegraded is true WHEN retries
+  // remain (so the graph routes back to draft for another shot), and false
+  // when the retry budget is exhausted (so finalize_degraded fires instead
+  // of an infinite redraft loop — the routing in graph/index.ts caps at
+  // retryCount < 2).
   const PARSE_FAILURE_REPORT: VettingReport = {
     riskLevel: "high",
-    qualityDegraded: false,
+    qualityDegraded: retryCount < 2,
     jurisdictionIssues: [],
     citationsFlagged: [],
     factualIssuesFound: ["VETTING_PARSE_FAILED: model output could not be parsed as JSON — letter quality is UNVERIFIED"],

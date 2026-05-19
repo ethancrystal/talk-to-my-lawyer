@@ -1,6 +1,7 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
+import { LETTER_STATUS } from "../../../../shared/types/letter";
 import type { PipelineStateType } from "../state";
 import {
   breadcrumb,
@@ -49,8 +50,9 @@ export async function researchNode(
     "[ResearchNode] Starting research stage",
   );
 
-  // Update letter status to 'researching'
-  await updateLetterStatus(letterId, "researching");
+  // Update letter status to 'researching' — use canonical constant per
+  // CLAUDE.md ("Never hardcode status strings — import from shared/types/letter.ts").
+  await updateLetterStatus(letterId, LETTER_STATUS.researching);
 
   const { jurisdiction, letterType, subject, description, desiredOutcome } = ctx;
 

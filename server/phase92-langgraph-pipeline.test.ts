@@ -302,20 +302,20 @@ vi.mock("@langchain/anthropic", () => {
         };
       }
 
-      // Default fallback — unknown caller, return a benign empty-ish JSON
-      return {
-        content: JSON.stringify({ note: "default mock response" }),
-        usage_metadata: { input_tokens: 0, output_tokens: 0 },
-      };
+      // Fail fast on unmapped mock paths. A benign default fallback used to
+      // mask prompt-drift regressions — if a future change tweaks a system
+      // prompt enough that none of the stage branches match, that's a real
+      // signal we want to see, not silently absorb.
+      throw new Error(
+        `[phase92] Unmapped ChatAnthropic.invoke mock path for system prompt: ${sys.slice(0, 120)}`,
+      );
     }
 
-    // stream() retained as a safety net in case any future code paths use it,
-    // but the draft node no longer calls it (moved to the failover helper).
+    // stream() is no longer used by the LangGraph nodes — draft moved onto
+    // the unified failover helper. If something accidentally calls stream()
+    // again, throw so the regression surfaces in tests.
     async *stream(_messages: any[], _options?: any): AsyncGenerator<any> {
-      yield {
-        content: "Mock stream response",
-        usage_metadata: { input_tokens: 0, output_tokens: 0 },
-      };
+      throw new Error("[phase92] Unexpected ChatAnthropic.stream() call — draft is supposed to use callLlmWithFailover");
     }
   }
   return { ChatAnthropic };

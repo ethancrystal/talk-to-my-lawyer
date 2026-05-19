@@ -23,12 +23,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-// ── Load parent .env BEFORE vi.mock factories run ──────────────────
-// vi.mock is hoisted, but module-level code at the top of this file
-// still runs before any test executes. The .env values just need to
-// be present by the time runLangGraphPipeline is called, since the
-// failover helper reads process.env per call.
-(function loadParentEnv() {
+// ── Load parent .env only when the smoke test is actually going to run ──
+// Without the LIVE gate, the IIFE used to mutate process.env on every test
+// module load (even when all `it.skipIf` branches were going to skip), which
+// could leak env state into unrelated tests sharing the same vitest worker.
+function loadParentEnv() {
   const candidates = [
     path.resolve(__dirname, "../.env"),
     path.resolve(__dirname, "../../.env"),
@@ -57,9 +56,10 @@ import * as path from "node:path";
     }
     break;
   }
-})();
+}
 
 const LIVE = process.env.LANGGRAPH_SMOKE_LIVE === "1";
+if (LIVE) loadParentEnv();
 
 // ─── Mocks (mirror phase92 — DB / checkpointer / freePreviewEmailCron only) ───
 

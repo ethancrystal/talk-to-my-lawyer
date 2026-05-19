@@ -3,6 +3,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import type { BaseMessage } from "@langchain/core/messages";
 import { SystemMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
+import { ENV } from "../../../_core/env";
 
 // ═══════════════════════════════════════════════════════
 // Shared OpenAI-primary / Anthropic-fallback failover helper for
@@ -38,7 +39,7 @@ const log = createLogger({ module: "LangGraph:LLMFailover" });
 // or /google-ai-studio. (Cloudflare uses "google-ai-studio" as the segment
 // name for Gemini in their AI Gateway routing.)
 function getGatewayBaseUrl(provider: "openai" | "anthropic" | "gemini"): string | undefined {
-  const base = process.env.CF_AI_GATEWAY_BASE_URL?.trim();
+  const base = ENV.cfAiGatewayBaseUrl.trim();
   if (!base) return undefined;
   const trimmed = base.replace(/\/+$/, "");
   const segment = provider === "gemini" ? "google-ai-studio" : provider;
@@ -55,10 +56,9 @@ function getGatewayBaseUrl(provider: "openai" | "anthropic" | "gemini"): string 
 // (research listing, vetting score). Empirically these stages are
 // not the quality bottleneck.
 // Default to `gemini-flash-latest` — Google's rolling-latest alias that
-// always points at the current Flash generation. Matches the curl example
-// the user shared, and is what their API key has quota for.
-// Override via GEMINI_MODEL env var if a pinned model is needed.
-const GEMINI_DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+// always points at the current Flash generation. Override via ENV.geminiModel
+// (GEMINI_MODEL env var) if a pinned model is needed.
+const GEMINI_DEFAULT_MODEL = ENV.geminiModel || "gemini-flash-latest";
 
 const MODELS = {
   primary: {
@@ -102,6 +102,15 @@ export interface LlmCallOptions {
    * AND reduces output token spend.
    */
   temperature?: number;
+  /**
+   * Per-call Anthropic model override. When set, the Anthropic fallback
+   * uses this exact model id instead of MODELS[tier].anthropic. Lets stages
+   * pin their canonical Anthropic model (e.g. vetting → claude-sonnet-4-6
+   * per the 4-stage pipeline convention) while still sharing the unified
+   * OpenAI-primary failover. Stage 3 Assembly should pin sonnet-4-5,
+   * Stage 4 Vetting should pin sonnet-4-6.
+   */
+  anthropicModel?: string;
 }
 
 function extractContent(raw: unknown): string {
@@ -179,7 +188,7 @@ function messagesToGeminiRequest(
 }
 
 async function callGemini(opts: LlmCallOptions): Promise<LlmCallResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = ENV.geminiApiKey;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY not set");
   }
@@ -244,7 +253,7 @@ async function callOpenAI(opts: LlmCallOptions): Promise<LlmCallResult> {
   const model = MODELS[tier].openai;
   const gatewayUrl = getGatewayBaseUrl("openai");
   const llm = new ChatOpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: ENV.openAiApiKey,
     model,
     maxTokens: opts.maxTokens,
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
@@ -266,12 +275,15 @@ async function callOpenAI(opts: LlmCallOptions): Promise<LlmCallResult> {
 }
 
 async function callAnthropic(opts: LlmCallOptions): Promise<LlmCallResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = ENV.anthropicApiKey;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not set — cannot fall back from OpenAI");
   }
   const tier = opts.tier ?? "primary";
-  const model = MODELS[tier].anthropic;
+  // Stage-specific override wins over the tier default — used by vetting
+  // (pins sonnet-4-6) and assembly (pins sonnet-4-5) to keep the 4-stage
+  // pipeline's canonical Anthropic models even when routed via this helper.
+  const model = opts.anthropicModel ?? MODELS[tier].anthropic;
   const gatewayUrl = getGatewayBaseUrl("anthropic");
   const llm = new ChatAnthropic({
     apiKey,
@@ -321,7 +333,7 @@ export async function callLlmWithFailover(
   const errors: string[] = [];
 
   // ── 1. OpenAI (primary) ──
-  if (process.env.OPENAI_API_KEY) {
+  if (ENV.openAiApiKey) {
     try {
       const result = await callOpenAI(opts);
       log.info(

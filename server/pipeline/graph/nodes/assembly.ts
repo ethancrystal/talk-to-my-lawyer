@@ -100,6 +100,10 @@ Desired outcome: ${ctx.desiredOutcome}`;
     // tokens AND tighter prose. 0.3 is a good middle ground (still varied
     // enough to fix awkward phrasing, deterministic enough to not waffle).
     temperature: 0.3,
+    // Stage 3 (Assembly) canonical Anthropic model per the 4-stage pipeline
+    // convention — pinned here so the OpenAI-primary failover still uses the
+    // right Claude model on fallback.
+    anthropicModel: "claude-sonnet-4-5-20250929",
   });
 
   const refinedContent = result.content;

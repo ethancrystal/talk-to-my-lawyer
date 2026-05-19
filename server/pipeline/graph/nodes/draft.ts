@@ -1,6 +1,7 @@
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
+import { LETTER_STATUS } from "../../../../shared/types/letter";
 import type { PipelineStateType } from "../state";
 import {
   breadcrumb,
@@ -56,8 +57,9 @@ export async function draftNode(
     "[DraftNode] Starting draft stage",
   );
 
-  // Update letter status to 'drafting'
-  await updateLetterStatus(letterId, "drafting");
+  // Update letter status to 'drafting' — use canonical constant per CLAUDE.md
+  // ("Never hardcode status strings — import from shared/types/letter.ts").
+  await updateLetterStatus(letterId, LETTER_STATUS.drafting);
 
   // Research context — compressed JSON (no indent) to save input tokens.
   const researchContext = researchPacket
