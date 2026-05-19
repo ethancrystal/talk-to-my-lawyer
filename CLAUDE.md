@@ -63,10 +63,13 @@ Before making any changes, check:
 | Schema | `drizzle/schema/` (multi-file) + `drizzle/schema/constants.ts` (`LETTER_STATUSES` tuple, `LetterStatus` union) |
 | Status transitions | `shared/types/letter.ts` → `ALLOWED_TRANSITIONS`, `isValidTransition()`, `STATUS_CONFIG` |
 | tRPC procedure guards | `server/_core/trpc.ts` (admin / super-admin / email-verified) + `server/routers/_shared.ts` (role guards) |
-| AI pipeline | `server/pipeline/orchestrator.ts` + `server/pipeline/{orchestration,research,vetting,graph,prompts}/` |
+| AI pipeline (legacy / fallback) | `server/pipeline/orchestrator.ts` + `server/pipeline/{orchestration,research,vetting}/` |
+| AI pipeline (LangGraph / default) | `server/pipeline/graph/index.ts` + `server/pipeline/graph/nodes/{init,research,draft,assembly,vetting,finalize}.ts` |
+| LLM failover (OpenAI / Anthropic, Gemini dormant) | `server/pipeline/graph/nodes/llm-failover.ts` → `callLlmWithFailover()` |
+| Pipeline route resolver | `server/pipeline/routing.ts` → `resolvePipelineExecutionRoute()` |
 | Audit trail | `logReviewAction` → `review_actions` table (`server/db/review-actions.ts`) |
 | Pricing | `shared/pricing.ts` (never hardcode: $299/letter, $299/mo, $2,400/yr) |
-| Env vars | `server/_core/env.ts` → `ENV` object + `validateRequiredEnv()` |
+| Env vars | `server/_core/env.ts` → `ENV` object + `validateRequiredEnv()` (AI-related fields are lazy getters — see Gotchas) |
 
 ### Refactor Landmarks
 
@@ -75,6 +78,7 @@ Before making any changes, check:
 - Admin router is modularized via `server/routers/admin/index.ts` and composed from `server/routers/admin/{letters,users,jobs,learning}.ts`.
 - Letters router is modularized via `server/routers/letters/index.ts` and composed from `server/routers/letters/{submit,subscriber,client-approval}.ts`. The same per-feature subdirectory pattern applies to `server/routers/review/`, `server/routers/affiliate/`, and `server/routers/billing/`.
 - Pipeline stages live in subdirectories: `server/pipeline/{research,vetting,orchestration,graph,prompts}/`. `VettingResult` is exported from `server/pipeline/vetting/index.ts` (not `shared/types`). Pipeline routing between the simple path, LangGraph (`graph/`), and `fallback.ts` happens in `server/pipeline/routing.ts`.
+- **LangGraph LLM calls go through `callLlmWithFailover()` in `server/pipeline/graph/nodes/llm-failover.ts`** — every stage (research / draft / assembly / vetting) uses the same helper. Don't instantiate `ChatOpenAI` / `ChatAnthropic` directly in a new node. The helper picks model by `tier: "primary" | "lite"` and honors a per-call `anthropicModel` override for stage-canonical models on fallback (Stage 3 Assembly → `claude-sonnet-4-5-20250929`, Stage 4 Vetting → `claude-sonnet-4-6-20250514`).
 - DB layer: every router imports data-access functions from `server/db/<feature>.ts` (e.g. `letter-versions.ts`, `review-actions.ts`, `pipeline-records.ts`, `letters/`). Do not write raw Drizzle in routers.
 - Avoid reintroducing monolithic route/page files unless explicitly requested.
 - **Before splitting a `*.ts` file into a `*/index.ts` subdirectory, read the Module Move Checklist in [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) §1.14** — every relative import inside the moved file shifts one level deeper, and tests that source-grep the old path break silently.
@@ -105,6 +109,12 @@ Current REST surface, by registrar:
 
 - `server/pipeline/routing.ts` selects between `simple.ts`, the LangGraph graph under `server/pipeline/graph/`, and `fallback.ts`.
 - tRPC routers must enqueue pipeline jobs via pg-boss; `server/worker.ts` consumes them. Never call pipeline functions directly from a router.
+- **Default since PR #58**: `resolvePipelineExecutionRoute` returns `langgraph` for any non-free-trial submission. **Emergency rollback**: set `LANGGRAPH_DISABLED=true` to force everything back through the `standard` (n8n) route without a redeploy — separate knob from `LANGGRAPH_PIPELINE`, which only gates LangGraph internals inside the worker.
+- Provider order inside `callLlmWithFailover`: OpenAI (primary) → Anthropic (fallback). Gemini code (`callGemini`, `MODELS.gemini`) is plumbed but **dormant** — no orchestrator branch calls it because the configured key has free-tier quota 0. Cloudflare AI Gateway is also wired but inert unless `CF_AI_GATEWAY_BASE_URL` is set.
+
+### ENV — AI fields are lazy getters
+
+In `server/_core/env.ts`, AI-related fields (`anthropicApiKey`, `openAiApiKey`, `perplexityApiKey`, `geminiApiKey`, `geminiModel`, `cfAiGatewayBaseUrl`) are defined as getters, **not snapshot values**. They re-read `process.env` on every access. This is required so tests (notably `server/phase92-langgraph-pipeline.test.ts`) can mutate `process.env` in `beforeEach` to control failover routing. If you add a new AI-related env var, use the same getter pattern — don't capture at import time.
 
 ### Infra dependencies
 
@@ -163,6 +173,28 @@ Canonical table in [`AGENTS.md` §6](AGENTS.md#6-path-aliases) — `@/*` → `cl
 
 **Recursive learning** (`server/learning/`): attorney edits generate lessons stored in `pipeline_lessons`, injected into future AI prompts. Managed at `/admin/learning`.
 
+### LangGraph pipeline (default route since PR #58)
+
+Product routing in `server/pipeline/routing.ts → resolvePipelineExecutionRoute`:
+
+- `isFreeTrialSubmission` → **`simple`** pipeline (one Claude call, no research / vetting).
+- Anything else → **`langgraph`** state graph (`isPaidSubscriberSubmission` explicit, plus the fallthrough default).
+- Emergency rollback knob: `LANGGRAPH_DISABLED=true` → forces `standard` (n8n) route for non-free-trial submissions.
+
+LangGraph stages live under `server/pipeline/graph/nodes/`. Each LLM-calling stage routes through `callLlmWithFailover()` with this provider order:
+
+1. **OpenAI** — primary. `gpt-4o` for `tier: "primary"`, `gpt-4o-mini` for `tier: "lite"`.
+2. **Anthropic** — fallback. `claude-sonnet-4-5-20250929` for primary, `claude-haiku-4-5-20251001` for lite. Pass `anthropicModel` in `LlmCallOptions` to override per-stage (Assembly pins `sonnet-4-5`; Vetting pins `sonnet-4-6-20250514`).
+
+Stage configuration (verified against `server/pipeline/graph/nodes/`):
+
+| Stage | Tier | Temperature | Anthropic pin |
+| --- | --- | --- | --- |
+| Research | lite | 0 | (tier default) |
+| Draft | primary (default) | 0.5 | (tier default) |
+| Assembly | primary (default) | 0.3 | `claude-sonnet-4-5-20250929` |
+| Vetting | lite | 0 | `claude-sonnet-4-6-20250514` |
+
 ---
 
 ## Testing
@@ -176,3 +208,17 @@ pnpm test -- server/phase67-pricing.test.ts
 ```
 
 Seeded test credentials (subscriber / employee / attorney / admin at `@ttml.dev`, password `TestPass123!`) — see [`AGENTS.md` §12.4](AGENTS.md#124-test-credentials-seeded-via-scripts) for the full table.
+
+### Gated live smoke tests
+
+Tests that actually hit external LLM providers are **gated behind an env flag** so a normal `pnpm test` cannot accidentally burn API credits. The canonical example is `server/phase93-smoke-langgraph-live.test.ts`, which uses `it.skipIf(!process.env.LANGGRAPH_SMOKE_LIVE)`. To run it:
+
+```bash
+LANGGRAPH_SMOKE_LIVE=1 pnpm test phase93-smoke-langgraph
+```
+
+Convention for new live-LLM tests: name them `phaseNN-*-live.test.ts`, gate every `it` with `it.skipIf(!process.env.<FLAG>_LIVE)`, mock DB writes so no rows hit prod Supabase, and write any captured output to `.smoke-test-output/` (gitignored). Live smoke output is **not** intended for CI — it's a manual verification tool.
+
+### Mock-path drift protection (phase92)
+
+`server/phase92-langgraph-pipeline.test.ts` mocks `ChatAnthropic`. The mock disambiguates stages by system-prompt content (e.g. `"legal research assistant"` → research). The default-fallback branch of `invoke()` and the `stream()` generator both **throw** instead of returning benign payloads — this is intentional. If a future prompt edit makes a stage's system prompt not match any branch, the test fails loudly with the offending prompt prefix rather than silently passing on a fake response.
