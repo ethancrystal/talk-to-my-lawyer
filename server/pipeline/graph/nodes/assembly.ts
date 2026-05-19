@@ -1,4 +1,3 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import type { PipelineStateType } from "../state";
@@ -8,10 +7,12 @@ import {
   buildRedraftContextBlock,
   recordTokenUsage,
 } from "../memory";
+import { callLlmWithFailover } from "./llm-failover";
 
 const log = createLogger({ module: "LangGraph:AssemblyNode" });
 
 const ASSEMBLY_TIMEOUT_MS = 90_000;
+const ASSEMBLY_MAX_TOKENS = 4000;
 
 // ═══════════════════════════════════════════════════════
 // LANGGRAPH NODE: assembly
@@ -42,17 +43,13 @@ export async function assemblyNode(
     "[AssemblyNode] Starting assembly stage",
   );
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — assembly stage cannot proceed");
-
-  const llm = new ChatAnthropic({
-    apiKey,
-    model: "claude-sonnet-4-5-20250929",
-    maxTokens: 4000,
-  });
-
+  // Pass the FULL research packet (laws, statutes, precedents, jurisdiction
+  // notes, recommended approach) so the assembler can cross-check the draft
+  // against every grounded finding — not just the laws/statutes subset.
+  // JSON is serialized WITHOUT indentation to save ~30% of input tokens vs
+  // JSON.stringify(_, null, 2). The model parses either format identically.
   const researchSummary = researchPacket
-    ? `Laws & statutes: ${JSON.stringify(researchPacket.laws ?? researchPacket.statutes ?? "N/A")}`
+    ? `Research findings (verbatim from research stage): ${JSON.stringify(researchPacket)}`
     : "No research packet available.";
   const lessonsBlock = buildLessonsBlock(lessons);
   // On a redraft cycle the assembler should also know what vetting flagged
@@ -69,12 +66,16 @@ export async function assemblyNode(
 
 Quality standards:
 1. Verify all legal citations are properly formatted for ${ctx.jurisdiction}
-2. Ensure factual accuracy — flag any unsupported claims
+2. Cross-check every factual or legal claim against the research findings — REMOVE any claim that isn't supported by research or the intake.
 3. Improve clarity, flow, and professional tone
 4. Verify that the letter is persuasive and achieves the stated outcome
 5. Fix any grammatical or formatting issues
+6. Preserve the signature block and closing — never truncate mid-letter.
 
-Return ONLY the improved letter text. Do not include commentary or explanations.${lessonsBlock}${redraftBlock}`;
+Output format:
+- Return ONLY the improved letter text.
+- Do NOT include preamble (e.g. "Here is the refined letter:"), commentary, headers, or markdown fences.
+- The first character of your response should be the first character of the letter itself.${lessonsBlock}${redraftBlock}`;
 
   const userPrompt = `Please refine this legal letter draft.
 
@@ -88,27 +89,32 @@ Jurisdiction: ${ctx.jurisdiction}
 Letter type: ${ctx.letterType}
 Desired outcome: ${ctx.desiredOutcome}`;
 
-  const result = await llm.invoke(
-    [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(userPrompt),
-    ],
-    { signal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS) },
-  );
+  const result = await callLlmWithFailover({
+    messages: [new SystemMessage(systemPrompt), new HumanMessage(userPrompt)],
+    maxTokens: ASSEMBLY_MAX_TOKENS,
+    timeoutMs: ASSEMBLY_TIMEOUT_MS,
+    letterId,
+    stage: "assembly",
+    // Primary tier — assembly is the polishing stage, quality matters.
+    // Lower temperature reduces rambling continuations: cheaper output
+    // tokens AND tighter prose. 0.3 is a good middle ground (still varied
+    // enough to fix awkward phrasing, deterministic enough to not waffle).
+    temperature: 0.3,
+    // Stage 3 (Assembly) canonical Anthropic model per the 4-stage pipeline
+    // convention — pinned here so the OpenAI-primary failover still uses the
+    // right Claude model on fallback.
+    anthropicModel: "claude-sonnet-4-5-20250929",
+  });
 
-  const refinedContent = typeof result.content === "string"
-    ? result.content
-    : JSON.stringify(result.content);
-
-  const promptTokens = (result as any).usage_metadata?.input_tokens ?? 0;
-  const completionTokens = (result as any).usage_metadata?.output_tokens ?? 0;
+  const refinedContent = result.content;
 
   log.info(
     {
       letterId,
+      provider: result.provider,
       chars: refinedContent.length,
-      promptTokens,
-      completionTokens,
+      promptTokens: result.usage.promptTokens,
+      completionTokens: result.usage.completionTokens,
       isRedraft,
       retryCount,
     },
@@ -120,12 +126,18 @@ Desired outcome: ${ctx.desiredOutcome}`;
     currentStage: "vetting",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("assembly", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-5-20250929"),
+        recordTokenUsage(
+          "assembly",
+          result.provider,
+          result.usage.promptTokens,
+          result.usage.completionTokens,
+          result.model,
+        ),
       ],
       breadcrumbs: [
         breadcrumb(
           "assembly",
-          `Refined letter (${refinedContent.length} chars, tokens=${promptTokens + completionTokens}${isRedraft ? `, redraft #${retryCount}` : ""})`,
+          `Refined letter via ${result.provider} (${refinedContent.length} chars, tokens=${result.usage.promptTokens + result.usage.completionTokens}${isRedraft ? `, redraft #${retryCount}` : ""})`,
         ),
       ],
     } as any,

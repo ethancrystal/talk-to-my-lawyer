@@ -4,10 +4,21 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  // AI Pipeline
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
-  perplexityApiKey: process.env.PERPLEXITY_API_KEY ?? "",
+  // AI Pipeline — these are lazy getters so they reflect the CURRENT
+  // process.env at the time of access. Required because tests (e.g.
+  // phase92) mutate process.env in beforeEach to control failover
+  // routing; a snapshot captured at module-load would freeze stale
+  // values and break test isolation. Production code still gets the
+  // same value it would with a snapshot — process.env is set once at
+  // startup via dotenv.
+  get anthropicApiKey() { return process.env.ANTHROPIC_API_KEY ?? ""; },
+  get openAiApiKey() { return process.env.OPENAI_API_KEY ?? ""; },
+  get perplexityApiKey() { return process.env.PERPLEXITY_API_KEY ?? ""; },
+  // Google Gemini — dormant in the LangGraph failover chain but plumbed for future re-enable
+  get geminiApiKey() { return process.env.GEMINI_API_KEY ?? ""; },
+  get geminiModel() { return process.env.GEMINI_MODEL ?? ""; },
+  // Cloudflare AI Gateway — optional proxy in front of OpenAI / Anthropic / Gemini
+  get cfAiGatewayBaseUrl() { return process.env.CF_AI_GATEWAY_BASE_URL ?? ""; },
   // n8n Integration
   n8nWebhookUrl: process.env.N8N_WEBHOOK_URL ?? "",
   n8nCallbackSecret: process.env.N8N_CALLBACK_SECRET ?? "",
