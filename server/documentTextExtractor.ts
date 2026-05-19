@@ -14,9 +14,10 @@ export class DocumentTextExtractionError extends Error {
 function normalizeBase64Payload(fileBase64: string): string {
   const trimmed = fileBase64.trim();
   const commaIndex = trimmed.indexOf(",");
-  const payload = trimmed.startsWith("data:") && commaIndex >= 0
-    ? trimmed.slice(commaIndex + 1)
-    : trimmed;
+  const payload =
+    trimmed.startsWith("data:") && commaIndex >= 0
+      ? trimmed.slice(commaIndex + 1)
+      : trimmed;
 
   return payload.replace(/\s/g, "");
 }
@@ -52,14 +53,20 @@ function assertExpectedFileSignature(
     );
   }
 
-  if (fileType === "pdf" && !fileBuffer.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+  if (
+    fileType === "pdf" &&
+    !fileBuffer.subarray(0, 5).equals(Buffer.from("%PDF-"))
+  ) {
     throw new DocumentTextExtractionError(
       "The uploaded file is not a valid PDF.",
       "invalid_pdf_signature"
     );
   }
 
-  if (fileType === "docx" && !fileBuffer.subarray(0, 2).equals(Buffer.from("PK"))) {
+  if (
+    fileType === "docx" &&
+    !fileBuffer.subarray(0, 2).equals(Buffer.from("PK"))
+  ) {
     throw new DocumentTextExtractionError(
       "The uploaded file is not a valid DOCX file.",
       "invalid_docx_signature"

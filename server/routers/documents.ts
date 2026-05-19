@@ -111,6 +111,7 @@ import {
 import { captureServerException } from "../sentry";
 import {
   DocumentTextExtractionError,
+  decodeDocumentBase64,
   extractDocumentText,
 } from "../documentTextExtractor";
 import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "../queue";
@@ -276,31 +277,40 @@ export const documentsRouter = router({
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("general", `user:${ctx.user.id}`);
 
-        // Enforce binary size limit: 7.5MB decoded
-        const fileBuffer = Buffer.from(input.fileBase64, "base64");
-        if (fileBuffer.byteLength > 7_864_320) {
-          throw new TRPCError({
-            code: "PAYLOAD_TOO_LARGE",
-            message: "File exceeds the 7.5 MB size limit. Please upload a smaller document.",
-          });
-        }
-
-        // Extract text from document
         let documentText = "";
         try {
-          const extracted = await extractDocumentText(input);
+          // Enforce binary size limit: 7.5MB decoded
+          const fileBuffer = decodeDocumentBase64(input.fileBase64);
+          if (fileBuffer.byteLength > 7_864_320) {
+            throw new TRPCError({
+              code: "PAYLOAD_TOO_LARGE",
+              message: "File exceeds the 7.5 MB size limit. Please upload a smaller document.",
+            });
+          }
+
+          // Extract text from document
+          const extracted = await extractDocumentText({ ...input, fileBuffer });
           documentText = extracted.text;
         } catch (err) {
+          if (err instanceof TRPCError) throw err;
           logger.error(
             {
               err,
               fileName: input.fileName,
               fileType: input.fileType,
-              reason: err instanceof DocumentTextExtractionError ? err.reason : undefined,
+              reason:
+                err instanceof DocumentTextExtractionError
+                  ? err.reason
+                  : undefined,
             },
             "[DocumentAnalyzer] Text extraction failed:"
           );
-          captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
+          captureServerException(err, {
+            tags: {
+              component: "document_analyzer",
+              error_type: "text_extraction_failed",
+            },
+          });
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Could not extract text from the document. Please ensure it is a valid file.",

@@ -40,7 +40,9 @@ interface GooglePlacesService {
   ) => void;
 }
 
-const BUILD_TIME_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+const BUILD_TIME_API_KEY =
+  (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ??
+  (import.meta.env.VITE_GOOGLE_API_KEY as string | undefined);
 
 let googleMapsPromise: Promise<void> | null = null;
 
