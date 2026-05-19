@@ -2,7 +2,11 @@ import type { Express, RequestHandler } from "express";
 
 export function registerConfigRoute(app: Express) {
   const handler: RequestHandler = (_req, res) => {
-    const key = process.env.VITE_GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_MAPS_API_KEY ?? "";
+    const key =
+      process.env.VITE_GOOGLE_MAPS_API_KEY ??
+      process.env.VITE_GOOGLE_API_KEY ??
+      process.env.GOOGLE_MAPS_API_KEY ??
+      "";
     if (!key) {
       res.status(503).json({ error: "Maps API key not configured" });
       return;

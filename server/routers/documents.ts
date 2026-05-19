@@ -109,6 +109,11 @@ import {
   sendClientRevisionRequestEmail,
 } from "../email";
 import { captureServerException } from "../sentry";
+import {
+  DocumentTextExtractionError,
+  decodeDocumentBase64,
+  extractDocumentText,
+} from "../documentTextExtractor";
 import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "../queue";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore, consolidateLessonsForScope } from "../learning";
 import type { InsertPipelineLesson } from "../../drizzle/schema";
@@ -272,34 +277,40 @@ export const documentsRouter = router({
       .mutation(async ({ ctx, input }) => {
         await checkTrpcRateLimit("general", `user:${ctx.user.id}`);
 
-        // Enforce binary size limit: 7.5MB decoded
-        const fileBuffer = Buffer.from(input.fileBase64, "base64");
-        if (fileBuffer.byteLength > 7_864_320) {
-          throw new TRPCError({
-            code: "PAYLOAD_TOO_LARGE",
-            message: "File exceeds the 7.5 MB size limit. Please upload a smaller document.",
-          });
-        }
-
-        // Extract text from document
         let documentText = "";
         try {
-          if (input.fileType === "pdf") {
-            const { PDFParse } = await import("pdf-parse");
-            const parser = new PDFParse({ data: fileBuffer });
-            const pdfData = await parser.getText();
-            await parser.destroy();
-            documentText = pdfData.text;
-          } else if (input.fileType === "docx") {
-            const mammoth = await import("mammoth");
-            const result = await mammoth.extractRawText({ buffer: fileBuffer });
-            documentText = result.value;
-          } else {
-            documentText = fileBuffer.toString("utf-8");
+          // Enforce binary size limit: 7.5MB decoded
+          const fileBuffer = decodeDocumentBase64(input.fileBase64);
+          if (fileBuffer.byteLength > 7_864_320) {
+            throw new TRPCError({
+              code: "PAYLOAD_TOO_LARGE",
+              message: "File exceeds the 7.5 MB size limit. Please upload a smaller document.",
+            });
           }
+
+          // Extract text from document
+          const extracted = await extractDocumentText({ ...input, fileBuffer });
+          documentText = extracted.text;
         } catch (err) {
-          logger.error({ err: err }, "[DocumentAnalyzer] Text extraction failed:");
-          captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
+          if (err instanceof TRPCError) throw err;
+          logger.error(
+            {
+              err,
+              fileName: input.fileName,
+              fileType: input.fileType,
+              reason:
+                err instanceof DocumentTextExtractionError
+                  ? err.reason
+                  : undefined,
+            },
+            "[DocumentAnalyzer] Text extraction failed:"
+          );
+          captureServerException(err, {
+            tags: {
+              component: "document_analyzer",
+              error_type: "text_extraction_failed",
+            },
+          });
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Could not extract text from the document. Please ensure it is a valid file.",

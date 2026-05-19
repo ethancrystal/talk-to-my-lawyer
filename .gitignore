@@ -168,6 +168,13 @@ workers/wrangler.toml
 .local/
 worker/
 workers/
+!workers/
+!workers/pdf-worker/
+!workers/pdf-worker/**
+workers/pdf-worker/.wrangler/
+workers/pdf-worker/dist/
+workers/pdf-worker/node_modules/
+!workers/pdf-worker/wrangler.toml
 
 # ── Generated lock files in subdirectories ──────────────────────────────────
 artifacts/mockup-sandbox/package-lock.json
