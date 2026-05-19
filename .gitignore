@@ -166,6 +166,7 @@ workers/wrangler.toml
 
 # ── Local agent state & generated modules ───────────────────────────────────
 .local/
+.smoke-test-output/
 worker/
 workers/
 !workers/

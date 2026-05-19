@@ -10,14 +10,18 @@ type UsageContext = RunPipelineJobData["usageContext"];
  * Business rule:
  *   - New/non-subscriber first-letter preview => simple Claude pipeline.
  *   - Active paid subscriber submission        => LangGraph pipeline.
- *   - Legacy/admin/retry jobs                  => standard pipeline path.
+ *   - Everything else (legacy/admin/retry)     => LangGraph pipeline.
+ *
+ * The n8n-backed "standard" route is no longer reachable from product
+ * routing. The branch still exists in the worker for emergency manual
+ * triggers, but new submissions never fall through to it.
  */
 export function resolvePipelineExecutionRoute(
   usageContext: UsageContext
 ): PipelineExecutionRoute {
   if (usageContext?.isFreeTrialSubmission === true) return "simple";
   if (usageContext?.isPaidSubscriberSubmission === true) return "langgraph";
-  return "standard";
+  return "langgraph";
 }
 
 /**

@@ -28,8 +28,17 @@ function unauthorized(): Response {
   return jsonResponse({ error: "Unauthorized" }, 401);
 }
 
+function isLocalDev(request: Request): boolean {
+  const hostname = new URL(request.url).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 function assertAuthorized(request: Request, env: Env): Response | null {
-  if (!env.PDF_WORKER_SECRET) return null;
+  if (!env.PDF_WORKER_SECRET) {
+    // Fail closed in production. `wrangler dev` (localhost) may run unauthenticated
+    // for local testing; deployers should set PDF_WORKER_SECRET via `wrangler secret put`.
+    return isLocalDev(request) ? null : unauthorized();
+  }
 
   const header = request.headers.get("authorization") ?? "";
   const expected = `Bearer ${env.PDF_WORKER_SECRET}`;
@@ -69,7 +78,7 @@ async function renderPdf(req: PdfRequest, env: Env): Promise<Uint8Array> {
     try {
       await page.setContent(req.html, { waitUntil: "load" });
       return await page.pdf({
-        format: "letter",
+        format: "Letter",
         printBackground: true,
         displayHeaderFooter: true,
         headerTemplate: req.headerTemplate,
