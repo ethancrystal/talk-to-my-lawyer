@@ -109,6 +109,10 @@ import {
   sendClientRevisionRequestEmail,
 } from "../email";
 import { captureServerException } from "../sentry";
+import {
+  DocumentTextExtractionError,
+  extractDocumentText,
+} from "../documentTextExtractor";
 import { enqueuePipelineJob, enqueueRetryFromStageJob, getPipelineQueue } from "../queue";
 import { extractLessonFromApproval, extractLessonFromRejection, extractLessonFromChangesRequest, extractLessonFromEdit, extractLessonFromSubscriberFeedback, computeAndStoreQualityScore, consolidateLessonsForScope } from "../learning";
 import type { InsertPipelineLesson } from "../../drizzle/schema";
@@ -284,21 +288,18 @@ export const documentsRouter = router({
         // Extract text from document
         let documentText = "";
         try {
-          if (input.fileType === "pdf") {
-            const { PDFParse } = await import("pdf-parse");
-            const parser = new PDFParse({ data: fileBuffer });
-            const pdfData = await parser.getText();
-            await parser.destroy();
-            documentText = pdfData.text;
-          } else if (input.fileType === "docx") {
-            const mammoth = await import("mammoth");
-            const result = await mammoth.extractRawText({ buffer: fileBuffer });
-            documentText = result.value;
-          } else {
-            documentText = fileBuffer.toString("utf-8");
-          }
+          const extracted = await extractDocumentText(input);
+          documentText = extracted.text;
         } catch (err) {
-          logger.error({ err: err }, "[DocumentAnalyzer] Text extraction failed:");
+          logger.error(
+            {
+              err,
+              fileName: input.fileName,
+              fileType: input.fileType,
+              reason: err instanceof DocumentTextExtractionError ? err.reason : undefined,
+            },
+            "[DocumentAnalyzer] Text extraction failed:"
+          );
           captureServerException(err, { tags: { component: "document_analyzer", error_type: "text_extraction_failed" } });
           throw new TRPCError({
             code: "BAD_REQUEST",
