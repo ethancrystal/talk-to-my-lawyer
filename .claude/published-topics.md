@@ -36,3 +36,11 @@ Agent: check this file before writing to avoid duplicate topics.
 - What Is a Security Deposit Demand Letter and Does It Actually Get Results?
 - How California Renters Can Get Their Security Deposit Back Without Hiring a Lawyer
 - Small Claims Court vs. Demand Letter for a Security Deposit Dispute in California
+
+
+## 2026-05-19
+- My Contractor Did Shoddy Work and Refuses to Fix It — What Can I Do in California?
+- What Is a Breach of Contract Demand Letter and Does It Actually Work?
+- How Homeowners Can Hold Licensed Contractors Accountable Without Going to Court in California
+- Filing a CSLB Complaint vs. Sending a Demand Letter: Which Gets Your Money Back Faster in California?
+- The Complete Guide to Contractor Disputes and Construction Defect Claims in California (pillar)
