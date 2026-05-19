@@ -31,3 +31,8 @@ Agent: check this file before writing to avoid duplicate topics.
 - What Is a Refund Demand Letter and When Should You Send One?
 - How to Fight a Gym That Won't Cancel Your Membership or Stop Charging You in California
 - Credit Card Chargeback vs. Demand Letter: Which Is Better for Getting Your Money Back?
+## 2026-05-18
+- My Landlord Is Refusing to Return My Security Deposit — What Can I Do in California?
+- What Is a Security Deposit Demand Letter and Does It Actually Get Results?
+- How California Renters Can Get Their Security Deposit Back Without Hiring a Lawyer
+- Small Claims Court vs. Demand Letter for a Security Deposit Dispute in California
