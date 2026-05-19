@@ -11,7 +11,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 
-import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost } from "./providers";
+import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl } from "./providers";
 
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock } from "./citations";
@@ -51,7 +51,11 @@ export async function runAssemblyStage(
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
   const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly", undefined, pipelineCtx);
-  const assemblySystem = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
+  const assemblySystemText = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
+  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
+  // prefix is identical across retries, so subsequent calls within the 5-minute
+  // cache window pay reduced input token costs.
+  const assemblySystem = withCacheControl(assemblySystemText);
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
     : "";
@@ -74,8 +78,8 @@ export async function runAssemblyStage(
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
 
   const assemblyTokens = createTokenAccumulator();
-  let assemblyProvider = "anthropic";
-  let assemblyModelKey = "claude-sonnet-4-5-20250929";
+  let assemblyProvider = "openai";
+  let assemblyModelKey = "gpt-4o";
 
   const generateAssembly = async (errorFeedback?: string): Promise<string> => {
     const promptWithFeedback = errorFeedback
@@ -85,7 +89,7 @@ export async function runAssemblyStage(
       "Stage 3 (assembly retry)",
       letterId,
       async () => {
-        const model = assemblyProvider === "openai-failover" ? getAssemblyModelFallback() : assemblyProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getAssemblyModel();
+        const model = assemblyProvider === "anthropic-failover" ? getAssemblyModelFallback() : assemblyProvider === "groq-oss-fallback" ? getFreeOSSModelFallback() : getAssemblyModel();
         const r = await generateText({
           model,
           system: assemblySystem,
@@ -97,8 +101,8 @@ export async function runAssemblyStage(
         return r;
       },
       async () => {
-        assemblyProvider = "openai-failover";
-        assemblyModelKey = "gpt-4o-mini";
+        assemblyProvider = "anthropic-failover";
+        assemblyModelKey = "claude-sonnet-4-5-20250929";
         const r = await generateText({
           model: getAssemblyModelFallback(),
           system: assemblySystem,
@@ -127,14 +131,14 @@ export async function runAssemblyStage(
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("ASSEMBLY_OSS_FALLBACK"))) {
         pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during assembly retry (both Claude and OpenAI were unavailable). Legal structure and tone may differ significantly. Heightened attorney scrutiny required.`
+          `ASSEMBLY_OSS_FALLBACK: Groq Llama 3.3 used as last-resort during assembly retry (both OpenAI and Anthropic were unavailable). Legal structure and tone may differ significantly. Heightened attorney scrutiny required.`
         );
       }
     } else if (retryFailover && pipelineCtx) {
       if (!pipelineCtx.qualityWarnings) pipelineCtx.qualityWarnings = [];
       if (!pipelineCtx.qualityWarnings.some(w => w.startsWith("ASSEMBLY_FAILOVER"))) {
         pipelineCtx.qualityWarnings.push(
-          `ASSEMBLY_FAILOVER: Switched to OpenAI GPT-4o-mini during assembly retry due to rate limit on primary model.`
+          `ASSEMBLY_FAILOVER: Switched to Anthropic Claude Sonnet 4.5 during assembly retry due to rate limit on the OpenAI primary model.`
         );
       }
     }
@@ -168,7 +172,7 @@ export async function runAssemblyStage(
   const maxWords = Math.floor(targetWordCount * 2.0);
 
   try {
-    assemblyLogger.info({ letterId }, "[Pipeline] Stage 3: Claude final assembly starting");
+    assemblyLogger.info({ letterId }, "[Pipeline] Stage 3: OpenAI gpt-4o final assembly starting");
 
     const { result: firstAssemblyResult, provider: initialAssemblyProvider, failoverTriggered: assemblyFailover } = await withModelFailover(
       "Stage 3 (assembly)",
@@ -184,8 +188,8 @@ export async function runAssemblyStage(
         });
       },
       () => {
-        assemblyProvider = "openai-failover";
-        assemblyModelKey = "gpt-4o-mini";
+        assemblyProvider = "anthropic-failover";
+        assemblyModelKey = "claude-sonnet-4-5-20250929";
         const model = getAssemblyModelFallback();
         return generateText({
           model,
@@ -318,7 +322,7 @@ export async function runAssemblyStage(
       estimatedCostUsd: calculateCost(assemblyModelKey, assemblyTokens),
       responsePayloadJson: {
         provider: assemblyProvider,
-        failoverUsed: assemblyProvider === "openai-failover" || assemblyProvider === "groq-oss-fallback",
+        failoverUsed: assemblyProvider === "anthropic-failover" || assemblyProvider === "groq-oss-fallback",
         consistencyReport: checks.consistency,
         validationResults: pipelineCtx?.validationResults?.filter(v => v.stage === "final_assembly"),
         wordCount: rawFinalLetter.split(/\s+/).filter(w => w.length > 0).length,

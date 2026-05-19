@@ -48,11 +48,14 @@ vi.mock("@langchain/openai", () => ({
 
 vi.mock("./providers", () => ({
   getResearchModel: vi.fn(() => ({ provider: "perplexity", model: "sonar-pro" })),
+  // Post-2026 provider flip: OpenAI is primary, Anthropic is same-tier fallback
+  // for the drafting / assembly / vetting stages.
   getDraftModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
-  getDraftModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4" })),
-  getAssemblyModel: vi.fn(() => ({ provider: "anthropic", model: "claude-sonnet-4" })),
-  getAssemblyModelFallback: vi.fn(() => ({ provider: "openai-fallback", model: "gpt-4o-mini" })),
-  getVettingModelFallback: vi.fn(() => ({ provider: "openai-fallback", model: "gpt-4o-mini" })),
+  getDraftModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-5-20250929" })),
+  getAssemblyModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
+  getAssemblyModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-5-20250929" })),
+  getVettingModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
+  getVettingModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-6-20250514" })),
   createTokenAccumulator: vi.fn(() => ({ inputTokens: 0, outputTokens: 0 })),
   accumulateTokens: vi.fn(),
   calculateCost: vi.fn(() => "0.00"),
@@ -60,6 +63,7 @@ vi.mock("./providers", () => ({
   DRAFT_TIMEOUT_MS: 120_000,
   ASSEMBLY_TIMEOUT_MS: 120_000,
   isOpenAIFailoverAvailable: vi.fn(() => false),
+  isAnthropicFailoverAvailable: vi.fn(() => false),
   getAnthropicClient: vi.fn(() => ({})),
   getOpenAIClient: vi.fn(() => ({})),
 }));

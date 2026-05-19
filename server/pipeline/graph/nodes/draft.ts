@@ -1,95 +1,98 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
+import { LETTER_STATUS } from "../../../../shared/types/letter";
 import type { PipelineStateType } from "../state";
-import { breadcrumb, buildLessonsBlock, recordTokenUsage } from "../memory";
+import {
+  breadcrumb,
+  buildLessonsBlock,
+  buildRedraftContextBlock,
+  recordTokenUsage,
+} from "../memory";
+import { callLlmWithFailover } from "./llm-failover";
 
 const log = createLogger({ module: "LangGraph:DraftNode" });
 
 const DRAFT_TIMEOUT_MS = 120_000;
-const STREAM_FLUSH_INTERVAL_MS = 300; // Flush buffer to Supabase every 300ms
-const STREAM_MIN_BUFFER_CHARS = 50;  // Min chars before flushing mid-stream
-
-// ─── Supabase service role client (server-side only) ───
-// Use `any` generic so TypeScript doesn't require the
-// pipeline_stream_chunks table in the generated DB types.
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
-
-function getSupabaseServiceClient(): AnySupabaseClient {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for streaming");
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  }) as AnySupabaseClient;
-}
-
-// ─── Stream chunks to Supabase with buffering ───
-
-async function flushBufferToSupabase(
-  supabase: AnySupabaseClient,
-  letterId: number,
-  buffer: string,
-  sequenceNumber: number,
-  stage: string,
-): Promise<void> {
-  if (!buffer) return;
-  const { error } = await supabase.from("pipeline_stream_chunks").insert({
-    letter_id: letterId,
-    chunk_text: buffer,
-    stage,
-    sequence_number: sequenceNumber,
-  });
-  if (error) {
-    log.warn({ letterId, err: error.message }, "[DraftNode] Failed to insert stream chunk");
-  }
-}
+const DRAFT_MAX_TOKENS = 4000;
 
 // ═══════════════════════════════════════════════════════
-// LANGGRAPH NODE: draft (streaming)
+// LANGGRAPH NODE: draft
+//
+// Generates the initial draft body via the same failover chain
+// as every other LLM-calling stage (Gemini → OpenAI → Anthropic).
+//
+// NOTE: prior to this revision the draft node used
+// ChatAnthropic.stream() directly so live tokens could be flushed
+// to a `pipeline_stream_chunks` Supabase table for realtime UI
+// updates. That dual-purpose streaming code was removed when draft
+// moved onto the unified failover helper — the trade-off is no live
+// token stream on the subscriber dashboard during drafting, but a
+// consistent provider order across all stages.
 // ═══════════════════════════════════════════════════════
 
 export async function draftNode(
   state: PipelineStateType,
 ): Promise<Partial<PipelineStateType>> {
-  const { letterId, researchPacket, researchUnverified, sharedContext } = state;
+  const {
+    letterId,
+    researchPacket,
+    researchUnverified,
+    sharedContext,
+    retryCount,
+    vettingReport,
+    assembledLetter: priorAssembledLetter,
+  } = state;
   const ctx = sharedContext.normalized;
   const lessons = sharedContext.lessons ?? [];
-  log.info({ letterId, jurisdiction: ctx.jurisdiction, letterType: ctx.letterType }, "[DraftNode] Starting draft stage");
+  const isRedraft = retryCount > 0 && Boolean(vettingReport);
+  log.info(
+    {
+      letterId,
+      jurisdiction: ctx.jurisdiction,
+      letterType: ctx.letterType,
+      retryCount,
+      isRedraft,
+    },
+    "[DraftNode] Starting draft stage",
+  );
 
-  // Update letter status to 'drafting'
-  await updateLetterStatus(letterId, "drafting");
+  // Update letter status to 'drafting' — use canonical constant per CLAUDE.md
+  // ("Never hardcode status strings — import from shared/types/letter.ts").
+  await updateLetterStatus(letterId, LETTER_STATUS.drafting);
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — drafting stage cannot proceed");
-
-  const llm = new ChatAnthropic({
-    apiKey,
-    model: "claude-sonnet-4-5-20250929",
-    maxTokens: 4000,
-    streaming: true,
-  });
-
+  // Research context — compressed JSON (no indent) to save input tokens.
   const researchContext = researchPacket
-    ? `\n\nResearch findings:\n${JSON.stringify(researchPacket, null, 2)}`
+    ? `\n\nResearch findings: ${JSON.stringify(researchPacket)}`
     : "";
   const unverifiedWarning = researchUnverified
     ? "\n\nNOTE: Research was not web-grounded. Proceed with standard legal caution."
     : "";
   const lessonsBlock = buildLessonsBlock(lessons);
+  // On a redraft loop the model needs to see what failed last time —
+  // otherwise the loop runs blind and is just dice-rolling for a better
+  // pass. buildRedraftContextBlock returns "" for the first attempt.
+  const redraftBlock = buildRedraftContextBlock({
+    retryCount,
+    vettingReport,
+    priorDraft: priorAssembledLetter ?? "",
+  });
 
   const systemPrompt = `You are an expert legal letter writer. Draft professional, persuasive legal correspondence.
-Format: Formal legal letter with proper salutation, body paragraphs, and closing.
+
+Format requirements:
+- Formal legal letter with proper salutation, body paragraphs, and closing.
+- Target length: roughly 1 to 2 pages (300–800 words) — never truncate mid-sentence.
+- End with a clear signature block matching the sender name; do not omit the closing.
+
+Anti-hallucination rules (CRITICAL):
+- Do NOT invent statutes, case names, citation numbers, or court decisions. If you reference a law or case, it must come from the research findings below or be a well-known statute in ${ctx.jurisdiction}.
+- Do NOT invent facts, dates, dollar amounts, addresses, or parties beyond what the intake explicitly provides.
+- If the intake is missing a detail you would normally include, write a clear placeholder like "[INSERT DATE]" rather than fabricating one.
+
 Jurisdiction: ${ctx.jurisdiction}
 Letter type: ${ctx.letterType}
-${researchContext}${unverifiedWarning}${lessonsBlock}`;
+${researchContext}${unverifiedWarning}${lessonsBlock}${redraftBlock}`;
 
   const userPrompt = `Draft a ${ctx.letterType} legal letter with:
 Subject: ${ctx.subject}
@@ -101,83 +104,50 @@ Tone: ${ctx.tonePreference}
 ${ctx.financials ? `Financial details: ${JSON.stringify(ctx.financials)}` : ""}
 ${ctx.additionalContext ? `Additional context: ${ctx.additionalContext}` : ""}`;
 
-  // ─── Stream tokens with buffered Supabase inserts ───
+  const result = await callLlmWithFailover({
+    messages: [new SystemMessage(systemPrompt), new HumanMessage(userPrompt)],
+    maxTokens: DRAFT_MAX_TOKENS,
+    timeoutMs: DRAFT_TIMEOUT_MS,
+    letterId,
+    stage: "draft",
+    // Primary tier — drafting is the highest-impact stage; quality matters most here.
+    // Temperature 0.5 leaves room for varied phrasing while keeping the output grounded.
+    temperature: 0.5,
+  });
 
-  let supabase: AnySupabaseClient | null = null;
-  let streamingEnabled = false;
+  const fullContent = result.content;
 
-  try {
-    supabase = getSupabaseServiceClient();
-    streamingEnabled = true;
-  } catch (supabaseErr) {
-    log.warn({ letterId, err: String(supabaseErr) }, "[DraftNode] Supabase streaming disabled — missing env vars");
-  }
-
-  let fullContent = "";
-  let buffer = "";
-  let sequenceNumber = 0;
-  let lastFlushTime = Date.now();
-  let promptTokens = 0;
-  let completionTokens = 0;
-
-  // Stream via LangGraph's streamEvents
-  const stream = await llm.stream(
-    [
-      new SystemMessage(systemPrompt),
-      new HumanMessage(userPrompt),
-    ],
-    { signal: AbortSignal.timeout(DRAFT_TIMEOUT_MS) },
+  log.info(
+    {
+      letterId,
+      provider: result.provider,
+      model: result.model,
+      chars: fullContent.length,
+      promptTokens: result.usage.promptTokens,
+      completionTokens: result.usage.completionTokens,
+      isRedraft,
+      retryCount,
+    },
+    "[DraftNode] Draft completed",
   );
-
-  for await (const chunk of stream) {
-    const text = typeof chunk.content === "string" ? chunk.content : "";
-
-    // Capture usage metadata from the final chunk when streaming completes.
-    // LangChain Anthropic emits usage_metadata on the terminal chunk.
-    const usageMeta = (chunk as any).usage_metadata;
-    if (usageMeta) {
-      promptTokens = usageMeta.input_tokens ?? promptTokens;
-      completionTokens = usageMeta.output_tokens ?? completionTokens;
-    }
-
-    if (!text) continue;
-
-    fullContent += text;
-    buffer += text;
-
-    // Flush buffer to Supabase on interval or when buffer is large enough
-    const now = Date.now();
-    const shouldFlush =
-      streamingEnabled &&
-      supabase &&
-      buffer.length >= STREAM_MIN_BUFFER_CHARS &&
-      now - lastFlushTime >= STREAM_FLUSH_INTERVAL_MS;
-
-    if (shouldFlush) {
-      await flushBufferToSupabase(supabase!, letterId, buffer, sequenceNumber++, "draft");
-      buffer = "";
-      lastFlushTime = now;
-    }
-  }
-
-  // Final flush of any remaining buffer
-  if (streamingEnabled && supabase && buffer.length > 0) {
-    await flushBufferToSupabase(supabase, letterId, buffer, sequenceNumber++, "draft_complete");
-  }
-
-  log.info({ letterId, chars: fullContent.length, chunks: sequenceNumber, promptTokens, completionTokens }, "[DraftNode] Draft streaming completed");
 
   return {
     assembledLetter: fullContent,
     currentStage: "assembly",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("draft", "anthropic", promptTokens, completionTokens, "claude-sonnet-4-5-20250929"),
+        recordTokenUsage(
+          "draft",
+          result.provider,
+          result.usage.promptTokens,
+          result.usage.completionTokens,
+          result.model,
+        ),
       ],
       breadcrumbs: [
         breadcrumb(
           "draft",
-          `Draft streamed (${fullContent.length} chars, ${sequenceNumber} chunks, tokens=${promptTokens + completionTokens})`,
+          `Draft via ${result.provider} (${fullContent.length} chars, tokens=${result.usage.promptTokens + result.usage.completionTokens}${isRedraft ? `, redraft #${retryCount}` : ""})`,
         ),
       ],
     } as any,

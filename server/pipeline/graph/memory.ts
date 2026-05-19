@@ -155,6 +155,72 @@ export function buildLessonsBlock(lessons: LessonRecord[] | undefined): string {
 }
 
 // ═══════════════════════════════════════════════════════
+// buildRedraftContextBlock — make the redraft loop actually self-correcting
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Build a "prior attempt failed vetting" block for the draft/assembly redraft loop.
+ *
+ * Returns empty string when retryCount === 0 or no vettingReport is available,
+ * so callers can unconditionally concatenate without a branch.
+ *
+ * Without this block the loop is structurally present (vetting → draft →
+ * vetting) but functionally degenerate: the model gets the same inputs and
+ * has no signal about what failed. Surfacing the prior draft + specific
+ * vetting issues turns the loop into a genuine self-correction pass.
+ *
+ * Why prior draft is truncated to 4000 chars: a typical letter is well
+ * under that, but defensive against a runaway draft pass blowing the
+ * context window when stacked under research + lessons + intake.
+ */
+export function buildRedraftContextBlock(opts: {
+  retryCount: number;
+  vettingReport: Record<string, any> | null | undefined;
+  priorDraft: string;
+}): string {
+  const { retryCount, vettingReport, priorDraft } = opts;
+  if (retryCount <= 0 || !vettingReport) return "";
+
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
+
+  const issueLines = [
+    ...arr(vettingReport.jurisdictionIssues).map((i) => `  - Jurisdiction: ${i}`),
+    ...arr(vettingReport.citationsFlagged).map((i) => `  - Citation: ${i}`),
+    ...arr(vettingReport.factualIssuesFound).map((i) => `  - Factual: ${i}`),
+  ];
+
+  const recLines = arr(vettingReport.recommendations)
+    .slice(0, 5)
+    .map((r, i) => `  ${i + 1}. ${r}`);
+
+  const priorDraftBlock = priorDraft
+    ? `\n\nPrior draft (revise — do not repeat verbatim):\n"""\n${priorDraft.slice(0, 4000)}\n"""`
+    : "";
+
+  const issuesBlock = issueLines.length
+    ? `\n\nSpecific issues to fix:\n${issueLines.join("\n")}`
+    : "";
+
+  const recsBlock = recLines.length
+    ? `\n\nAttorney recommendations:\n${recLines.join("\n")}`
+    : "";
+
+  const summary = typeof vettingReport.summary === "string" ? vettingReport.summary : "Quality issues found";
+  const score = vettingReport.overallScore ?? "?";
+  const risk = typeof vettingReport.riskLevel === "string" ? vettingReport.riskLevel : "unknown";
+
+  return `\n\nREVISION PASS (attempt #${retryCount + 1}): the prior draft was flagged by attorney vetting.${priorDraftBlock}
+
+Vetting feedback:
+  Summary: ${summary}
+  Overall score: ${score}/10
+  Risk level: ${risk}${issuesBlock}${recsBlock}
+
+Address each issue explicitly in the new draft. Keep what worked; fix what was flagged.`;
+}
+
+// ═══════════════════════════════════════════════════════
 // mergeSharedContext — LangGraph reducer
 // ═══════════════════════════════════════════════════════
 

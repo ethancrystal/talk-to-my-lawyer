@@ -52,7 +52,10 @@ async function generatePresignedUrl(key: string): Promise<string> {
   const client = getR2Client();
   const bucket = getR2Bucket();
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-  return getSignedUrl(client, command, { expiresIn: 3600 });
+  type PresignerClient = Parameters<typeof getSignedUrl>[0];
+  return getSignedUrl(client as unknown as PresignerClient, command, {
+    expiresIn: 3600,
+  });
 }
 
 async function resolveUrl(key: string): Promise<string> {

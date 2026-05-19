@@ -1,33 +1,69 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
+import { LETTER_STATUS } from "../../../../shared/types/letter";
 import type { PipelineStateType } from "../state";
 import {
   breadcrumb,
   buildLessonsBlock,
   recordTokenUsage,
-  type NormalizedIntake,
 } from "../memory";
+import { callLlmWithFailover } from "./llm-failover";
 
 const log = createLogger({ module: "LangGraph:ResearchNode" });
 
 const RESEARCH_TIMEOUT_MS = 90_000;
-const PERPLEXITY_BASE_URL = "https://api.perplexity.ai";
-const PERPLEXITY_MODEL = "sonar";
+// Cost optimization: research output is structured JSON of statute/case names.
+// 1200 tokens is plenty for the JSON schema we ask for. Lite tier (gpt-4o-mini
+// / claude-haiku-4-5) is ~17× cheaper per token than the primary tier and
+// produces equivalent quality for this listing task.
+const RESEARCH_MAX_TOKENS = 1200;
 
-// ─── Perplexity fetch (direct REST, same pattern as existing research.ts) ───
+// ═══════════════════════════════════════════════════════
+// LANGGRAPH NODE: research
+//
+// Provider order (per product directive): OpenAI gpt-4o primary,
+// Anthropic Claude fallback. Neither does web grounding by default,
+// so researchUnverified is always true here — the model is reasoning
+// from training data, not live search. The downstream draft/assembly/
+// vetting prompts already account for this by tightening their
+// anti-hallucination guidance when researchUnverified=true.
+//
+// If web-grounded research is needed in the future, re-introduce
+// Perplexity as a primary or tertiary call here.
+// ═══════════════════════════════════════════════════════
 
-async function fetchPerplexityResearch(
-  ctx: NormalizedIntake,
-  letterId: number,
-): Promise<{ content: string; provider: string; usage: { promptTokens: number; completionTokens: number } }> {
-  const apiKey = process.env.PERPLEXITY_API_KEY;
-  if (!apiKey) throw new Error("PERPLEXITY_API_KEY not set");
+export async function researchNode(
+  state: PipelineStateType,
+): Promise<Partial<PipelineStateType>> {
+  const { letterId, sharedContext } = state;
+  const ctx = sharedContext.normalized;
+  const lessons = sharedContext.lessons ?? [];
+  const lessonsBlock = buildLessonsBlock(lessons);
+  log.info(
+    {
+      letterId,
+      jurisdiction: ctx.jurisdiction,
+      letterType: ctx.letterType,
+      lessonsInjected: lessons.length,
+    },
+    "[ResearchNode] Starting research stage",
+  );
+
+  // Update letter status to 'researching' — use canonical constant per
+  // CLAUDE.md ("Never hardcode status strings — import from shared/types/letter.ts").
+  await updateLetterStatus(letterId, LETTER_STATUS.researching);
 
   const { jurisdiction, letterType, subject, description, desiredOutcome } = ctx;
 
-  const prompt = `Research the following legal matter in ${jurisdiction}:
+  const systemPrompt = `You are a legal research assistant. Return structured JSON only — no commentary, no markdown fences.
+
+Anti-hallucination rules:
+- Cite only statutes and cases you are confident exist. If you are not sure a citation is real for ${jurisdiction}, OMIT it rather than fabricate.
+- Prefer well-known statutes and widely-cited cases over obscure ones.
+- If you genuinely do not know the answer for a section, return an empty array for that key rather than inventing.${lessonsBlock ? `\n\n${lessonsBlock}` : ""}`;
+
+  const userPrompt = `Research the following legal matter in ${jurisdiction}:
 Letter type: ${letterType}
 Subject: ${subject}
 Issue: ${description || "See intake data"}
@@ -42,144 +78,66 @@ Provide:
 
 Return structured JSON with keys: laws, statutes, precedents, jurisdiction_notes, recommended_approach`;
 
-  const response = await fetch(`${PERPLEXITY_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: PERPLEXITY_MODEL,
-      messages: [
-        { role: "system", content: "You are a legal research assistant. Return structured JSON." },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 2000,
-      return_citations: true,
-    }),
-    signal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
+  const result = await callLlmWithFailover({
+    messages: [new SystemMessage(systemPrompt), new HumanMessage(userPrompt)],
+    maxTokens: RESEARCH_MAX_TOKENS,
+    timeoutMs: RESEARCH_TIMEOUT_MS,
+    letterId,
+    stage: "research",
+    tier: "lite",
+    temperature: 0,
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "unknown");
-    throw new Error(`Perplexity returned ${response.status}: ${text}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content ?? "";
-  const usage = {
-    promptTokens: data.usage?.prompt_tokens ?? 0,
-    completionTokens: data.usage?.completion_tokens ?? 0,
-  };
-  return { content, provider: "perplexity", usage };
-}
-
-// ─── Claude fallback for research ───
-
-async function fetchClaudeResearch(
-  ctx: NormalizedIntake,
-): Promise<{ content: string; provider: string; usage: { promptTokens: number; completionTokens: number } }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
-
-  const llm = new ChatAnthropic({
-    apiKey,
-    model: "claude-3-5-haiku-20241022",
-    maxTokens: 2000,
-  });
-
-  const { jurisdiction, letterType, subject, description, desiredOutcome } = ctx;
-
-  const result = await llm.invoke(
-    [
-      new SystemMessage("You are a legal research assistant. Return structured JSON with keys: laws, statutes, precedents, jurisdiction_notes, recommended_approach."),
-      new HumanMessage(`Research this ${letterType} letter matter in ${jurisdiction}: ${subject}. Issue: ${description}. Desired outcome: ${desiredOutcome}.`),
-    ],
-    { signal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS) },
-  );
-
-  const content = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
-  // LangChain Anthropic returns usage_metadata on the AIMessage
-  const usage = {
-    promptTokens: (result as any).usage_metadata?.input_tokens ?? 0,
-    completionTokens: (result as any).usage_metadata?.output_tokens ?? 0,
-  };
-  return { content, provider: "anthropic-fallback", usage };
-}
-
-// ═══════════════════════════════════════════════════════
-// LANGGRAPH NODE: research
-// ═══════════════════════════════════════════════════════
-
-export async function researchNode(
-  state: PipelineStateType,
-): Promise<Partial<PipelineStateType>> {
-  const { letterId, sharedContext } = state;
-  const ctx = sharedContext.normalized;
-  log.info({ letterId, jurisdiction: ctx.jurisdiction, letterType: ctx.letterType }, "[ResearchNode] Starting research stage");
-
-  // Update letter status to 'researching'
-  await updateLetterStatus(letterId, "researching");
-
-  let researchContent: string;
-  let researchProvider: string;
-  let researchUnverified = false;
-  let usage = { promptTokens: 0, completionTokens: 0 };
-
-  try {
-    // Primary: Perplexity sonar with AbortSignal.timeout
-    const result = await fetchPerplexityResearch(ctx, letterId);
-    researchContent = result.content;
-    researchProvider = result.provider;
-    usage = result.usage;
-    log.info({ letterId, provider: researchProvider }, "[ResearchNode] Perplexity research succeeded");
-  } catch (perplexityErr) {
-    const errMsg = perplexityErr instanceof Error ? perplexityErr.message : String(perplexityErr);
-    log.warn({ letterId, err: errMsg }, "[ResearchNode] Perplexity failed — falling back to Claude");
-
-    try {
-      // Fallback: Claude Haiku (no web grounding)
-      const result = await fetchClaudeResearch(ctx);
-      researchContent = result.content;
-      researchProvider = result.provider;
-      researchUnverified = true; // No web grounding
-      usage = result.usage;
-      log.info({ letterId }, "[ResearchNode] Claude fallback research succeeded (researchUnverified=true)");
-    } catch (claudeErr) {
-      const claudeMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
-      log.error({ letterId, err: claudeMsg }, "[ResearchNode] Both Perplexity and Claude failed");
-      throw new Error(`Research stage failed: Perplexity: ${errMsg}; Claude: ${claudeMsg}`);
-    }
-  }
+  // No web grounding — record researchUnverified so downstream stages can
+  // tighten their factual-claim guidance.
+  const researchUnverified = true;
 
   // Parse research packet
   let researchPacket: Record<string, any>;
   try {
-    // Try to extract JSON from the response
-    const jsonMatch = researchContent.match(/\{[\s\S]*\}/);
-    researchPacket = jsonMatch ? JSON.parse(jsonMatch[0]) : { rawContent: researchContent };
+    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+    researchPacket = jsonMatch
+      ? JSON.parse(jsonMatch[0])
+      : { rawContent: result.content };
   } catch {
-    researchPacket = { rawContent: researchContent };
+    researchPacket = { rawContent: result.content };
   }
+
+  log.info(
+    {
+      letterId,
+      provider: result.provider,
+      tokens: result.usage.promptTokens + result.usage.completionTokens,
+    },
+    "[ResearchNode] Research completed",
+  );
 
   return {
     researchPacket,
-    researchProvider,
+    researchProvider: result.provider,
     researchUnverified,
     currentStage: "draft",
     sharedContext: {
       tokenUsage: [
-        recordTokenUsage("research", researchProvider, usage.promptTokens, usage.completionTokens),
+        recordTokenUsage(
+          "research",
+          result.provider,
+          result.usage.promptTokens,
+          result.usage.completionTokens,
+          result.model,
+        ),
       ],
       breadcrumbs: [
         breadcrumb(
           "research",
-          `Research completed by ${researchProvider} (unverified=${researchUnverified}, tokens=${usage.promptTokens + usage.completionTokens})`,
+          `Research completed by ${result.provider} (${result.model}, unverified=${researchUnverified}, tokens=${result.usage.promptTokens + result.usage.completionTokens})`,
         ),
       ],
     } as any,
     messages: [
-      new HumanMessage(`Research completed by ${researchProvider}. Unverified: ${researchUnverified}`),
+      new HumanMessage(
+        `Research completed by ${result.provider}. Unverified: ${researchUnverified}`,
+      ),
     ],
   };
 }

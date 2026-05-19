@@ -10,14 +10,27 @@ type UsageContext = RunPipelineJobData["usageContext"];
  * Business rule:
  *   - New/non-subscriber first-letter preview => simple Claude pipeline.
  *   - Active paid subscriber submission        => LangGraph pipeline.
- *   - Legacy/admin/retry jobs                  => standard pipeline path.
+ *   - Everything else (legacy/admin/retry)     => LangGraph pipeline.
+ *
+ * The n8n-backed "standard" route is no longer the default. The branch
+ * still exists in the worker as an emergency rollback path: set the
+ * env var `LANGGRAPH_DISABLED=true` to force every non-free-trial
+ * submission back through the standard pipeline. This is a separate
+ * knob from `LANGGRAPH_PIPELINE` (which only gates LangGraph internals
+ * inside the worker, not product routing).
  */
 export function resolvePipelineExecutionRoute(
   usageContext: UsageContext
 ): PipelineExecutionRoute {
+  // Emergency rollback escape hatch — keeps the n8n + standard-pipeline
+  // path reachable when ops needs to flip back without redeploying code.
+  // Intentionally checks process.env directly (not ENV) so a runtime
+  // toggle on Railway/Vercel takes effect without restart.
+  if (process.env.LANGGRAPH_DISABLED === "true") return "standard";
+
   if (usageContext?.isFreeTrialSubmission === true) return "simple";
   if (usageContext?.isPaidSubscriberSubmission === true) return "langgraph";
-  return "standard";
+  return "langgraph";
 }
 
 /**

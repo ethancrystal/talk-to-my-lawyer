@@ -3,7 +3,7 @@ import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
 import {
-  isOpenAIFailoverAvailable,
+  isAnthropicFailoverAvailable,
   isGroqFallbackAvailable,
 } from "./providers";
 import { logger } from "../logger";
@@ -289,34 +289,38 @@ export interface FailoverResult<T> {
     | "perplexity-failover"
     | "openai-stored-prompt"
     | "openai-failover"
+    | "anthropic-failover"
     | "claude-research-fallback"
     | "groq-oss-fallback";
   failoverTriggered: boolean;
 }
 
 /**
- * Wraps a primary AI generation function with an OpenAI GPT-4o-mini fallback and an
- * optional Groq Llama 3.3 70B OSS last-resort fallback.
+ * Wraps a primary AI generation function with an Anthropic Claude Sonnet 4.5
+ * fallback and an optional Groq Llama 3.3 70B OSS last-resort fallback.
  *
- * Three-tier failover:
- *   1. primaryFn — primary model (Perplexity / Claude Opus)
- *   2. fallbackFn — OpenAI GPT-4o-mini (existing)
+ * Three-tier failover (post 2026 provider flip — OpenAI is now PRIMARY, Anthropic
+ * is FALLBACK for both drafting and assembly):
+ *   1. primaryFn — primary model (OpenAI GPT-4o for drafting/assembly)
+ *   2. fallbackFn — Anthropic Claude Sonnet 4.5
  *   3. ossLastResortFn (optional) — Groq Llama 3.3 70B (free OSS, last resort)
  *
  * On rate-limit, 429, credits-depleted, quota, billing, overloaded, or
  * token/context-length-exceeded errors from the primary model, transparently
- * retries the same operation using the OpenAI fallback. If that also fails, and
- * ossLastResortFn is provided and GROQ_API_KEY is set, tries Groq before throwing.
+ * retries the same operation using the Anthropic fallback. If that also fails,
+ * and ossLastResortFn is provided and GROQ_API_KEY is set, tries Groq before
+ * throwing.
  *
- * If OPENAI_API_KEY is not set, skips OpenAI failover and attempts OSS fallback directly.
- * If GROQ_API_KEY is not set, logs a warning and skips the OSS tier.
- * All other error types (timeout, parse failure, content policy) are re-thrown
- * immediately without attempting failover.
+ * If ANTHROPIC_API_KEY is not set, skips the Anthropic failover and attempts
+ * OSS fallback directly. If GROQ_API_KEY is also not set, logs a warning and
+ * lets the original error propagate. All other error types (timeout, parse
+ * failure, content policy) are re-thrown immediately without attempting
+ * failover.
  *
  * @param stage - Pipeline stage name (used for logging)
  * @param letterId - Letter ID (used for logging)
- * @param primaryFn - The primary generation function to call first
- * @param fallbackFn - The OpenAI GPT-4o-mini fallback function
+ * @param primaryFn - The primary (OpenAI) generation function to call first
+ * @param fallbackFn - The Anthropic Claude Sonnet 4.5 fallback function
  * @param ossLastResortFn - Optional Groq Llama 3.3 OSS last-resort function
  */
 export async function withModelFailover<T>(
@@ -351,29 +355,29 @@ export async function withModelFailover<T>(
     const primaryMsg =
       primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
 
-    if (!isOpenAIFailoverAvailable()) {
+    if (!isAnthropicFailoverAvailable()) {
       logger.error(
-        `[Pipeline] ${stage} for letter #${letterId}: rate-limit/credits error detected but OPENAI_API_KEY is not set — skipping OpenAI failover. Original error: ${primaryMsg}`
+        `[Pipeline] ${stage} for letter #${letterId}: rate-limit/credits error detected but ANTHROPIC_API_KEY is not set — skipping Anthropic failover. Original error: ${primaryMsg}`
       );
       // Skip straight to OSS fallback if available
     } else {
       logger.warn(
-        `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to OpenAI GPT-4o-mini failover. Original error: ${primaryMsg}`
+        `[Pipeline] ${stage} for letter #${letterId}: primary model rate-limited/credits-depleted — switching to Anthropic Claude Sonnet 4.5 failover. Original error: ${primaryMsg}`
       );
 
       try {
         const result = await fallbackFn();
         logger.info(
-          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover succeeded (provider=openai-failover)`
+          `[Pipeline] ${stage} for letter #${letterId}: Anthropic Claude Sonnet 4.5 failover succeeded (provider=anthropic-failover)`
         );
-        return { result, provider: "openai-failover", failoverTriggered: true };
+        return { result, provider: "anthropic-failover", failoverTriggered: true };
       } catch (fallbackErr) {
         const fallbackMsg =
           fallbackErr instanceof Error
             ? fallbackErr.message
             : String(fallbackErr);
         logger.error(
-          `[Pipeline] ${stage} for letter #${letterId}: OpenAI GPT-4o-mini failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
+          `[Pipeline] ${stage} for letter #${letterId}: Anthropic Claude Sonnet 4.5 failover also failed — attempting OSS last resort. Fallback error: ${fallbackMsg}`
         );
 
         if (!ossLastResortFn) {
