@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pnpm install                       # install dependencies (Node ≥22.12, pnpm ≥10.4)
 pnpm dev                           # tsx watch server/_core/index.ts — Express + Vite HMR, port 3000
 pnpm check                         # tsc --noEmit — must pass before commit
-pnpm test                          # vitest run — ~80 test files under server/
+pnpm test                          # vitest run — ~83 test files under server/
 pnpm test -- server/foo.test.ts    # single file: pnpm test -- server/phase67-pricing.test.ts
 pnpm test:e2e                      # Playwright (e2e/)
 pnpm build                         # vite build + esbuild bundles (index, worker, migrate, instrument) → dist/
@@ -74,6 +74,7 @@ Before making any changes, check:
 - `client/src/pages/subscriber/LetterDetail.tsx` is a composition shell; keep status-specific UI in `client/src/components/subscriber/letter-detail/` (the single canonical subtree — do not recreate `pages/subscriber/letter-detail/`).
 - Admin router is modularized via `server/routers/admin/index.ts` and composed from `server/routers/admin/{letters,users,jobs,learning}.ts`.
 - Letters router is modularized via `server/routers/letters/index.ts` and composed from `server/routers/letters/{submit,subscriber,client-approval}.ts`. The same per-feature subdirectory pattern applies to `server/routers/review/`, `server/routers/affiliate/`, and `server/routers/billing/`.
+- Flat top-level routers — `server/routers/{auth,blog,documents,intakeFormTemplates,notifications,profile,templates,versions}.ts` — stay as single files. They are intentionally not modularized: don't split them into `*/index.ts` subdirectories unless one grows to a comparable size to `admin/` or `letters/`.
 - Pipeline stages live in subdirectories: `server/pipeline/{research,vetting,orchestration,graph,prompts}/`. `VettingResult` is exported from `server/pipeline/vetting/index.ts` (not `shared/types`). Pipeline routing between the simple path, LangGraph (`graph/`), and `fallback.ts` happens in `server/pipeline/routing.ts`.
 - DB layer: every router imports data-access functions from `server/db/<feature>.ts` (e.g. `letter-versions.ts`, `review-actions.ts`, `pipeline-records.ts`, `letters/`). Do not write raw Drizzle in routers.
 - Avoid reintroducing monolithic route/page files unless explicitly requested.
@@ -112,7 +113,7 @@ Current REST surface, by registrar:
 - **Workers** — Optional Cloudflare Workers for email (`EMAIL_WORKER_URL`), PDF generation (`PDF_WORKER_URL`), KV cache (`KV_WORKER_URL`), blog cache (`CF_BLOG_CACHE_WORKER_URL`), and affiliate redirects (`AFFILIATE_WORKER_URL`). When unset, the server falls back to local Puppeteer / direct Resend / no cache.
 - **Queue & cache** — pg-boss runs on the same Postgres for job queuing. Upstash Redis (`UPSTASH_REDIS_*`) backs `@upstash/ratelimit`.
 - **Observability** — Pino (`server/instrument.ts` is preloaded at boot via the `start` script's `--import`) and Sentry (Node + React). When logging with Pino, pass the merge object first: `logger.info({ err }, "msg")` — never `logger.info("msg", err)`.
-- **AI providers** — Anthropic + OpenAI + Perplexity, orchestrated via the Vercel AI SDK and LangChain/LangGraph (with the Postgres checkpointer at `@langchain/langgraph-checkpoint-postgres`). GCP/Vertex AI + GCS (`GCP_*`, `GCS_TRAINING_BUCKET`) are optional and used only by training capture / fine-tune paths.
+- **AI providers** — Anthropic + OpenAI + Perplexity, orchestrated via the Vercel AI SDK and LangChain/LangGraph (now on the **1.x** line, with the Postgres checkpointer at `@langchain/langgraph-checkpoint-postgres`). When authoring or editing graph nodes under `server/pipeline/graph/`, use the LangGraph 1.x API — pre-1.0 signatures and channel shapes have changed. GCP/Vertex AI + GCS (`GCP_*`, `GCS_TRAINING_BUCKET`) are optional and used only by training capture / fine-tune paths.
 
 ### TanStack Query v5
 
@@ -135,7 +136,7 @@ Current REST surface, by registrar:
 
 ### Frontend
 
-- Do NOT `import React` — Vite's JSX transformer handles it.
+- Stack: **React 19 + Vite 8** with the automatic JSX transform. Do NOT `import React` at the top of files, and avoid legacy namespace patterns like `React.FC` or `React.useState` — import hooks/types from `react` directly (`import { useState } from 'react'`). `React.lazy` is the documented exception (see lazy-pages bullet below).
 - Routing: `wouter` (not React Router). Use `Link` / `useLocation`.
 - Every interactive element needs `data-testid` following pattern `{action}-{target}`.
 - Frontend env vars: must be prefixed `VITE_` and accessed via `import.meta.env.VITE_*`.
@@ -167,7 +168,7 @@ Canonical table in [`AGENTS.md` §6](AGENTS.md#6-path-aliases) — `@/*` → `cl
 
 ## Testing
 
-Vitest; ~80 test files under `server/`. Some are phase-numbered (e.g. `phase92-langgraph-pipeline.test.ts`, `phase97-letter-lifecycle.test.ts`); others are feature-named (e.g. `attorney-review-pipeline.test.ts`, `entitlement-matrix.test.ts`, `paywall-status.test.ts`). Playwright e2e specs live under `e2e/`.
+Vitest; ~83 test files under `server/`. Some are phase-numbered (e.g. `phase92-langgraph-pipeline.test.ts`, `phase97-letter-lifecycle.test.ts`); others are feature-named (e.g. `attorney-review-pipeline.test.ts`, `entitlement-matrix.test.ts`, `paywall-status.test.ts`). Playwright e2e specs live under `e2e/`.
 
 Run a single file:
 
