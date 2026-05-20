@@ -3,8 +3,10 @@
  * Talk-to-My-Lawyer — Legal Letter Generation Platform
  *
  * Pricing model (source of truth: shared/pricing.ts):
- *  monthly       — $299/month: 4 letters/month, attorney review included
- *  yearly        — $2,400/year: 8 letters total, attorney review included
+ *  one_time_letter — $200 one-time: 1 letter, attorney review included
+ *                    (surfaced via special-offer popup on /pricing, not a grid card)
+ *  monthly        — $299/month: 4 letters/month, attorney review included
+ *  yearly         — $2,400/year: 8 letters total, attorney review included
  *
  * Legacy plan IDs kept for backward compatibility with existing Stripe subscriptions:
  *  per_letter   → treated as monthly ($299/month, 4 letters)
@@ -19,16 +21,18 @@
 
 import {
   MONTHLY_PRICE_CENTS,
+  ONE_TIME_LETTER_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
 } from "../shared/pricing";
 
 export {
   MONTHLY_PRICE_CENTS,
+  ONE_TIME_LETTER_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
 };
 
 export interface PlanConfig {
-  id: "monthly" | "yearly";
+  id: "monthly" | "yearly" | "one_time_letter";
   name: string;
   description: string;
   price: number; // in cents
@@ -45,6 +49,24 @@ export interface PlanConfig {
 // YEARLY_PRICE_CENTS re-exported above from shared/pricing.ts
 
 export const PLANS: Record<string, PlanConfig> = {
+  one_time_letter: {
+    id: "one_time_letter",
+    name: "Single Letter",
+    description:
+      "One attorney-reviewed legal letter — no subscription required",
+    price: ONE_TIME_LETTER_PRICE_CENTS, // $200 one-time
+    interval: "one_time",
+    lettersAllowed: 1,
+    badge: "Special Offer",
+    features: [
+      "1 attorney-reviewed letter",
+      "California-focused drafting engine",
+      "Professional legal research",
+      "Final approved PDF",
+      "Email delivery",
+      "No recurring charges",
+    ],
+  },
   monthly: {
     id: "monthly",
     name: "Monthly",
