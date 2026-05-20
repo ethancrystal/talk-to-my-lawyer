@@ -116,8 +116,30 @@ export function classifyErrorCode(
   err: unknown,
   failoverExhausted = false
 ): PipelineErrorCode {
+  // Honor a typed PipelineError.code when the caller already produced one
+  // (e.g. loadPrompt throwing BUILD_ARTIFACT_MISSING). Without this, message
+  // sniffing below would still arrive at the right answer for ENOENT, but
+  // anything that synthesized a PipelineError with a non-ENOENT message
+  // would be misclassified.
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && code in PIPELINE_ERROR_CODES) {
+      return code as PipelineErrorCode;
+    }
+  }
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
+  // Prompt-asset / build-artifact failure must be detected BEFORE the
+  // generic "json/parse" / "rate limit" branches, otherwise an ENOENT
+  // message containing the word "file" risks being miscategorised.
+  if (
+    lower.includes("build_artifact_missing") ||
+    lower.includes("build artifact missing") ||
+    lower.includes("prompt asset") ||
+    lower.includes("enoent") ||
+    lower.includes("no such file or directory")
+  )
+    return PIPELINE_ERROR_CODES.BUILD_ARTIFACT_MISSING;
   // "All providers exhausted" is emitted by withModelFailover when both primary and GPT-4o-mini fail.
   // This is the authoritative signal that no more failover is possible.
   if (lower.includes("all providers exhausted"))

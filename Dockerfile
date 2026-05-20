@@ -98,6 +98,15 @@ COPY --from=builder /app/drizzle/ ./drizzle/
 # `approved` with pdf_url=NULL — observed in production for letter #6.
 COPY --from=builder /app/attached_assets/ ./attached_assets/
 
+# Copy the markdown prompt templates loaded at runtime by
+# server/pipeline/prompts/loader.ts (research/drafting/assembly stages of the
+# standard pipeline). The loader probes both /app/dist/prompts and
+# /app/server/pipeline/prompts — ship to both so the production image survives
+# either path resolution (esbuild bundle __dirname vs cwd). Without these,
+# loadPrompt() throws BUILD_ARTIFACT_MISSING and the pipeline stops at stage 1.
+COPY --from=builder /app/server/pipeline/prompts/ ./server/pipeline/prompts/
+COPY --from=builder /app/server/pipeline/prompts/ ./dist/prompts/
+
 # Copy the Supabase CA certificate so getPostgresSsl() can use verify-full.
 # The helper defaults to certs/prod-ca-2021.crt when present.
 COPY --from=builder /app/certs/ ./certs/

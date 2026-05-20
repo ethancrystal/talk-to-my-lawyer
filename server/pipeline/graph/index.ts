@@ -136,6 +136,17 @@ export function classifyNodeError(err: unknown): PipelineErrorCode {
   }
   const msg = err instanceof Error ? err.message : String(err ?? "");
   const lower = msg.toLowerCase();
+  // Prompt asset / build artifact failure — must come before generic
+  // matches because ENOENT messages can contain other keywords.
+  if (
+    lower.includes("build_artifact_missing") ||
+    lower.includes("build artifact missing") ||
+    lower.includes("prompt asset") ||
+    lower.includes("enoent") ||
+    lower.includes("no such file or directory")
+  ) {
+    return PIPELINE_ERROR_CODES.BUILD_ARTIFACT_MISSING;
+  }
   if (
     lower.includes("api key") ||
     lower.includes("api_key") ||

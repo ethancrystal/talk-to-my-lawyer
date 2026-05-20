@@ -51,11 +51,6 @@ export async function runAssemblyStage(
     ? buildCitationRegistryPromptBlock(pipelineCtx.citationRegistry)
     : "";
   const lessonsBlockAssembly = await buildLessonsPromptBlock(intake.letterType, intake.jurisdiction?.state ?? null, "assembly", undefined, pipelineCtx);
-  const assemblySystemText = buildAssemblySystemPrompt() + citationRegistryBlock + lessonsBlockAssembly;
-  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
-  // prefix is identical across retries, so subsequent calls within the 5-minute
-  // cache window pay reduced input token costs.
-  const assemblySystem = withCacheControl(assemblySystemText);
   const vettingFeedbackBlock = pipelineCtx?.assemblyVettingFeedback
     ? `\n\n## VETTING FEEDBACK FROM PREVIOUS ATTEMPT\n${pipelineCtx.assemblyVettingFeedback}\n\nYou MUST address every issue listed above in this assembly attempt. Do NOT repeat the same errors.\n`
     : "";
@@ -71,7 +66,56 @@ export async function runAssemblyStage(
     intake
   );
 
-  const assemblyUser = buildAssemblyUserPrompt(normalizedIntake, research, draft) + vettingFeedbackBlock;
+  // Build prompts. Markdown templates loaded via loadPrompt — fail fast and
+  // mark the workflow job permanently failed if the runtime image is missing
+  // the prompt assets (BUILD_ARTIFACT_MISSING).
+  let assemblySystemBaseText: string;
+  let assemblyUserBaseText: string;
+  try {
+    assemblySystemBaseText = buildAssemblySystemPrompt();
+    assemblyUserBaseText = buildAssemblyUserPrompt(normalizedIntake, research, draft);
+  } catch (promptErr) {
+    const promptMsg =
+      promptErr instanceof Error ? promptErr.message : String(promptErr);
+    const promptErrCode =
+      promptErr instanceof PipelineError
+        ? promptErr.code
+        : classifyErrorCode(promptErr);
+    assemblyLogger.error(
+      { err: promptErr, letterId, jobId },
+      "[Pipeline] Stage 3: prompt asset load failed — failing stage permanently"
+    );
+    captureServerException(promptErr, {
+      tags: {
+        pipeline_stage: "assembly",
+        letter_id: String(letterId),
+        error_type: "prompt_asset_failure",
+      },
+      extra: { jobId, errorMessage: promptMsg },
+    });
+    await updateWorkflowJob(jobId, {
+      status: "failed",
+      errorMessage: formatStructuredError(
+        promptErrCode,
+        promptMsg,
+        "assembly",
+        "Failed to load assembly stage prompt asset"
+      ),
+      completedAt: new Date(),
+      responsePayloadJson: { promptAssetFailure: true, errorCode: promptErrCode },
+    });
+    throw promptErr instanceof PipelineError
+      ? promptErr
+      : new PipelineError(promptErrCode, promptMsg, "assembly");
+  }
+
+  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
+  // prefix is identical across retries, so subsequent calls within the 5-minute
+  // cache window pay reduced input token costs.
+  const assemblySystem = withCacheControl(
+    assemblySystemBaseText + citationRegistryBlock + lessonsBlockAssembly
+  );
+  const assemblyUser = assemblyUserBaseText + vettingFeedbackBlock;
 
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];

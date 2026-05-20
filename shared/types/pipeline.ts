@@ -242,6 +242,7 @@ export const PIPELINE_ERROR_CODES = {
   SUPERSEDED: "SUPERSEDED",
   RESEARCH_PROVIDER_FAILED: "RESEARCH_PROVIDER_FAILED",
   DRAFTING_PROVIDER_FAILED: "DRAFTING_PROVIDER_FAILED",
+  BUILD_ARTIFACT_MISSING: "BUILD_ARTIFACT_MISSING",
   UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
 
@@ -272,6 +273,7 @@ export const PIPELINE_ERROR_CATEGORY: Record<
   SUPERSEDED: "permanent",
   RESEARCH_PROVIDER_FAILED: "transient",
   DRAFTING_PROVIDER_FAILED: "transient",
+  BUILD_ARTIFACT_MISSING: "permanent",
   UNKNOWN_ERROR: "transient",
 };
 
@@ -294,6 +296,7 @@ export const PIPELINE_ERROR_LABELS: Record<PipelineErrorCode, string> = {
   SUPERSEDED: "Superseded",
   RESEARCH_PROVIDER_FAILED: "Research Provider Failed",
   DRAFTING_PROVIDER_FAILED: "Drafting Provider Failed",
+  BUILD_ARTIFACT_MISSING: "Build Artifact Missing",
   UNKNOWN_ERROR: "Unknown Error",
 };
 
@@ -410,6 +413,14 @@ export function isTransientError(
     lower.includes("api key") ||
     lower.includes("api_key") ||
     lower.includes("apikey")
+  )
+    return false;
+  if (
+    lower.includes("build_artifact_missing") ||
+    lower.includes("build artifact missing") ||
+    lower.includes("prompt asset") ||
+    lower.includes("enoent") ||
+    lower.includes("no such file or directory")
   )
     return false;
   return true;

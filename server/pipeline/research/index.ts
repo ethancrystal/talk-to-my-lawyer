@@ -134,8 +134,54 @@ export async function runResearchStage(
     },
     intake
   );
-  const systemPrompt = buildResearchSystemPrompt();
-  const userPrompt = buildResearchUserPrompt(normalizedIntake);
+  // Build prompts. If the markdown templates are missing from the runtime
+  // image (BUILD_ARTIFACT_MISSING), fail fast with a structured error on the
+  // already-open research_runs + workflow_jobs rows so the admin monitor
+  // shows the right cause rather than a generic timeout.
+  let systemPrompt: string;
+  let userPrompt: string;
+  try {
+    systemPrompt = buildResearchSystemPrompt();
+    userPrompt = buildResearchUserPrompt(normalizedIntake);
+  } catch (promptErr) {
+    const promptMsg =
+      promptErr instanceof Error ? promptErr.message : String(promptErr);
+    const promptErrCode =
+      promptErr instanceof PipelineError
+        ? promptErr.code
+        : classifyErrorCode(promptErr);
+    logger.error(
+      { err: promptErr, letterId, jobId, runId },
+      "[Pipeline] Stage 1: prompt asset load failed — failing stage permanently"
+    );
+    captureServerException(promptErr, {
+      tags: {
+        pipeline_stage: "research",
+        letter_id: String(letterId),
+        error_type: "prompt_asset_failure",
+      },
+      extra: { researchRunId: runId, jobId, errorMessage: promptMsg },
+    });
+    const structuredPromptErr = formatStructuredError(
+      promptErrCode,
+      promptMsg,
+      "research",
+      "Failed to load research stage prompt asset"
+    );
+    await updateResearchRun(runId, {
+      status: "failed",
+      errorMessage: structuredPromptErr,
+    });
+    await updateWorkflowJob(jobId, {
+      status: "failed",
+      errorMessage: structuredPromptErr,
+      completedAt: new Date(),
+      responsePayloadJson: { promptAssetFailure: true, errorCode: promptErrCode },
+    });
+    throw promptErr instanceof PipelineError
+      ? promptErr
+      : new PipelineError(promptErrCode, promptMsg, "research");
+  }
 
   const researchTokens = createTokenAccumulator();
 
