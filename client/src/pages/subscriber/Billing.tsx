@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import AppLayout from "@/components/shared/AppLayout";
+import SingleLetterOfferModal from "@/components/SingleLetterOfferModal";
 import {
   CheckCircle2,
   CreditCard,
@@ -23,10 +24,16 @@ import {
 import { toast } from "sonner";
 import { Link } from "wouter";
 import { useEffect } from "react";
+import { PRICING } from "../../../../shared/pricing";
 
 const PLAN_DISPLAY: Record<string, { name: string; color: string }> = {
+  one_time_letter: {
+    name: "Single Letter ($200)",
+    color:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  },
   single_letter: {
-    name: "Single Letter ($299)",
+    name: "Single Letter ($299) (Legacy)",
     color: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
   },
   monthly: {
@@ -209,6 +216,24 @@ export default function Billing() {
     },
     onError: err => {
       toast.error("Could not open billing portal", {
+        description: err.message || "Please try again in a moment.",
+      });
+    },
+  });
+
+  // Used by the $200 SingleLetterOfferModal popup at the bottom of this page.
+  // Routes the user straight to Stripe Checkout for the one_time_letter plan
+  // rather than bouncing through /pricing.
+  const checkoutMutation = trpc.billing.createCheckout.useMutation({
+    onSuccess: data => {
+      toast.info("Redirecting to secure checkout...");
+      const win = window.open(data.url, "_blank");
+      if (!win) {
+        window.location.href = data.url;
+      }
+    },
+    onError: err => {
+      toast.error("Could not start checkout", {
         description: err.message || "Please try again in a moment.",
       });
     },
@@ -429,6 +454,25 @@ export default function Billing() {
           portalMutate={() => billingPortalMutation.mutate()}
         />
       </div>
+
+      {/* $200 one-time-letter special offer popup. Only fires for users who
+          don't currently have an active subscription — otherwise they don't
+          need a per-letter option. Dismissal is shared with the /pricing
+          popup via the same sessionStorage key, so the user never sees both. */}
+      {!isLoading && subscription?.status !== "active" && (
+        <SingleLetterOfferModal
+          onPurchase={planId =>
+            checkoutMutation.mutate({
+              planId,
+              returnTo: "/subscriber/billing",
+            })
+          }
+          isLoading={
+            checkoutMutation.isPending &&
+            checkoutMutation.variables?.planId === PRICING.oneTimeLetter.id
+          }
+        />
+      )}
     </AppLayout>
   );
 }

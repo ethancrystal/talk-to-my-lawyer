@@ -5,22 +5,49 @@
  * Import from here — never hardcode prices in components or procedures.
  *
  * Pricing model:
+ *  - One-Time:      $200 one-time (1 letter, surfaced via special-offer popup)
  *  - Monthly:       $299/month (4 letters/month)
  *  - Yearly:        $2,400/year (8 letters total)
  *
- * Note: Single Letter ($299 one-time) has been removed.
- * Non-subscribers must subscribe to submit letters for attorney review.
+ * The one-time letter offering is shown only via the SingleLetterOfferModal
+ * popup on /pricing — it is intentionally not a third card in the main grid.
  */
 
 export const PRICING = {
   /**
-   * Single Letter — $299 one-time
-   * @deprecated Removed from public plans. Subscription-only for attorney review.
-   * Kept for backward compat with legacy Stripe products and existing customers.
+   * One-Time Letter — $200 single-letter purchase, surfaced via the
+   * special-offer popup on /pricing. Same attorney-review flow as
+   * subscription plans, just billed once for one letter.
+   */
+  oneTimeLetter: {
+    id: "one_time_letter",
+    name: "Single Letter",
+    price: 200,
+    priceDisplay: "$200",
+    period: "one-time",
+    lettersIncluded: 1,
+    description:
+      "One California-focused legal-letter draft with attorney review — no subscription required.",
+    features: [
+      "1 attorney-reviewed letter",
+      "California-focused drafting engine",
+      "Structured from curated legal-letter patterns",
+      "Licensed attorney review & approval",
+      "PDF download of approved draft",
+      "No recurring charges",
+    ],
+  },
+
+  /**
+   * Single Letter — $299 one-time (legacy)
+   * @deprecated Superseded by the $200 oneTimeLetter offering above.
+   * Kept ONLY for backward compat with legacy Stripe products and existing
+   * customers whose subscriptions row references plan_id="single_letter".
+   * Do not surface in UI; do not create new Stripe checkouts against it.
    */
   singleLetter: {
     id: "single_letter",
-    name: "Single Letter",
+    name: "Single Letter (legacy)",
     price: 299,
     priceDisplay: "$299",
     period: "one-time",
@@ -97,7 +124,10 @@ export const AFFILIATE_DISCOUNT_PERCENT = 20;
 /** Affiliate commission rate in basis points (500 = 5%). Applied to sale amount in cents. */
 export const AFFILIATE_COMMISSION_BASIS_POINTS = 500;
 
-/** @deprecated Single letter removed from public plans. Kept for legacy webhook. */
+/** One-time letter price in cents (for Stripe) — the $200 special-offer plan. */
+export const ONE_TIME_LETTER_PRICE_CENTS = PRICING.oneTimeLetter.price * 100;
+
+/** @deprecated Legacy $299 single letter. Kept for backward-compat webhook lookups only. */
 export const SINGLE_LETTER_PRICE_CENTS = PRICING.singleLetter.price * 100;
 
 /** Monthly price in cents (for Stripe) */

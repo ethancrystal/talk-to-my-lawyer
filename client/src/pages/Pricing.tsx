@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
 import PublicNav from "@/components/shared/PublicNav";
 import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
+import SingleLetterOfferModal from "@/components/SingleLetterOfferModal";
 import { PRICING } from "../../../shared/pricing";
 
 const PLANS = [
@@ -121,6 +122,14 @@ export default function Pricing() {
       "@type": "OfferCatalog",
       name: "Legal Letter Plans",
       itemListElement: [
+        {
+          "@type": "Offer",
+          name: "Single Letter",
+          price: String(PRICING.oneTimeLetter.price),
+          priceCurrency: "USD",
+          description:
+            "One attorney-reviewed legal letter, paid once. No subscription.",
+        },
         {
           "@type": "Offer",
           name: "Monthly Plan",
@@ -489,6 +498,15 @@ export default function Pricing() {
             ))}
           </div>
         </section>
+
+        {/* ── Special-offer popup (one-time $200 letter) ── */}
+        <SingleLetterOfferModal
+          onPurchase={handleSelectPlan}
+          isLoading={
+            checkoutMutation.isPending &&
+            checkoutMutation.variables?.planId === PRICING.oneTimeLetter.id
+          }
+        />
 
         {/* ── FAQ-style note ── */}
         <section className="mt-12 mx-auto max-w-3xl">

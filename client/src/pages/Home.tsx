@@ -312,13 +312,8 @@ export default function Home() {
             >
               FAQ
             </button>
-            <Link
-              href="/analyze"
-              className="text-[13px] font-semibold text-blue-600 hover:text-blue-800 tracking-wide uppercase transition-colors"
-              data-testid="nav-analyze"
-            >
-              Doc Analyzer
-            </Link>
+            {/* Doc Analyzer desktop nav link removed 2026-05-20 — feature
+                temporarily disabled. Restore alongside PublicNav.tsx entry. */}
             <Link
               href="/blog"
               className="text-[13px] font-semibold text-slate-500 hover:text-slate-900 tracking-wide uppercase transition-colors"
@@ -398,14 +393,7 @@ export default function Home() {
               >
                 FAQ
               </button>
-              <Link
-                href="/analyze"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-sm font-semibold text-blue-600 py-2 uppercase tracking-wide text-left"
-                data-testid="mobile-analyze"
-              >
-                Doc Analyzer
-              </Link>
+              {/* Doc Analyzer mobile nav link removed 2026-05-20 — see desktop comment above. */}
               <div className="h-px bg-slate-100 my-1" />
               <button
                 onClick={goToLogin}

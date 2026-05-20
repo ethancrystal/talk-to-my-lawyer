@@ -82,9 +82,15 @@ Other constants:
 - Paid Revision: $20 (after the first free revision)
 - Affiliate discount: 20% (constant `AFFILIATE_DISCOUNT_PERCENT`)
 - Stripe amounts are in CENTS (multiply by 100)
-- Single Letter ($299 one-time) is `@deprecated` in `shared/pricing.ts` — kept
-  for legacy Stripe products and existing customers, NOT shown on the public
-  pricing page. Do not reintroduce as a new offering.
+- One-Time Letter ($200) — surfaced **only** via the `SingleLetterOfferModal`
+  popup on `/pricing` (auto-opens once per session, then suppressed via
+  `sessionStorage`). Intentionally not a third card in the main pricing grid.
+  Plan id `one_time_letter`, registered in `server/stripe-products.ts` with
+  `interval: "one_time"` and `lettersAllowed: 1`.
+- Single Letter ($299 one-time, plan id `single_letter`) is `@deprecated` in
+  `shared/pricing.ts` — kept for legacy Stripe products and existing customer
+  records only. Superseded by the $200 `oneTimeLetter` above; do not create
+  new checkouts against the $299 plan.
 
 ### 1.9 Environment Variables
 All env vars are accessed through `server/_core/env.ts` → `ENV` object.

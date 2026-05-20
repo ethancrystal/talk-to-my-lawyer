@@ -19,7 +19,9 @@ const NAV_LINKS: NavLink[] = [
   { href: "/services", label: "Services" },
   { href: "/pricing", label: "Pricing" },
   { href: "/blog", label: "Blog" },
-  { href: "/analyze", label: "Doc Analyzer", highlight: true },
+  // Doc Analyzer link removed 2026-05-20 — feature temporarily disabled due
+  // to mammoth + @xmldom/xmldom 0.9.x incompatibility breaking DOCX parsing.
+  // Re-enable by restoring this entry once the dep override is in place.
 ];
 
 export default function PublicNav({ activeLink }: PublicNavProps) {

@@ -89,6 +89,34 @@ describe("classifyNodeError", () => {
     expect(classifyNodeError(err)).toBe(PIPELINE_ERROR_CODES.RATE_LIMITED);
   });
 
+  // ── Build artifact (prompt asset) missing ──────────────────────────
+  // Permanent failure — runtime image is missing markdown the loader needs.
+  // Must NOT be misclassified as API_TIMEOUT or UNKNOWN_ERROR, otherwise the
+  // graph router treats it as transient and burns retries on the same fault.
+  it("maps a Node ENOENT message for a prompt asset to BUILD_ARTIFACT_MISSING", () => {
+    expect(
+      classifyNodeError(
+        new Error(
+          "ENOENT: no such file or directory, open '/app/dist/research-system.md'"
+        )
+      )
+    ).toBe(PIPELINE_ERROR_CODES.BUILD_ARTIFACT_MISSING);
+  });
+
+  it("maps 'prompt asset \"foo.md\" not found' to BUILD_ARTIFACT_MISSING", () => {
+    expect(
+      classifyNodeError(
+        new Error('prompt asset "research-system.md" not found in any known runtime location')
+      )
+    ).toBe(PIPELINE_ERROR_CODES.BUILD_ARTIFACT_MISSING);
+  });
+
+  it("BUILD_ARTIFACT_MISSING is classified as permanent (no retries)", () => {
+    expect(
+      PIPELINE_ERROR_CATEGORY[PIPELINE_ERROR_CODES.BUILD_ARTIFACT_MISSING]
+    ).toBe("permanent");
+  });
+
   // ── API key message sniffing ───────────────────────────────────────
   it("maps 'ANTHROPIC_API_KEY not set' to API_KEY_MISSING", () => {
     expect(classifyNodeError(new Error("ANTHROPIC_API_KEY not set"))).toBe(

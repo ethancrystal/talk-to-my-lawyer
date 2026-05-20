@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, AlertCircle } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
-import { ANALYZE_PREFILL_KEY, US_STATES } from "../../../../shared/types";
+// ANALYZE_PREFILL_KEY / US_STATES / AnalysisPrefill / DocumentAnalysisResult
+// no longer imported here — they backed the document-analyzer "Draft Letter
+// from analysis" prefill flow, which was removed 2026-05-20 along with the
+// AnalysisHistory card. Restore alongside the AnalysisHistory render block.
 import ApprovedLetterPreviewModal from "@/components/ApprovedLetterPreviewModal";
-import type {
-  AnalysisPrefill,
-  DocumentAnalysisResult,
-} from "../../../../shared/types";
 import { useLetterListRealtime } from "@/hooks/useLetterRealtime";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useEffect } from "react";
@@ -24,7 +23,7 @@ import { SubscriptionBanner } from "@/components/subscriber/dashboard/Subscripti
 import { FreeTierBanner } from "@/components/subscriber/dashboard/FreeTierBanner";
 import { DashboardStats } from "@/components/subscriber/dashboard/DashboardStats";
 import { LetterList } from "@/components/subscriber/dashboard/LetterList";
-import { AnalysisHistory } from "@/components/subscriber/dashboard/AnalysisHistory";
+// AnalysisHistory removed 2026-05-20 — Doc Analyzer feature temporarily disabled.
 import { StatusGuide } from "@/components/subscriber/dashboard/StatusGuide";
 
 // Statuses where the dashboard should auto-refresh
@@ -80,8 +79,8 @@ export default function SubscriberDashboard() {
     },
   });
 
-  const { data: analysesData, isLoading: analysesLoading } =
-    trpc.documents.getMyAnalyses.useQuery();
+  // trpc.documents.getMyAnalyses query removed 2026-05-20 along with the
+  // AnalysisHistory card. Backend procedure still exists, just no longer called.
 
   // Supabase Realtime — instant updates when any letter changes for this user
   useLetterListRealtime({
@@ -90,46 +89,10 @@ export default function SubscriberDashboard() {
     enabled: !!user?.id,
   });
 
-  const resolveJurisdictionCode = (
-    detected: string | null | undefined
-  ): string | undefined => {
-    if (!detected) return undefined;
-    const upper = detected.trim().toUpperCase();
-    const byCode = US_STATES.find(s => s.code === upper);
-    if (byCode) return byCode.code;
-    const lower = detected.trim().toLowerCase();
-    const byName = US_STATES.find(s => s.name.toLowerCase() === lower);
-    if (byName) return byName.code;
-    const byPrefix = US_STATES.find(s =>
-      lower.startsWith(s.name.toLowerCase())
-    );
-    if (byPrefix) return byPrefix.code;
-    return undefined;
-  };
-
-  const handleUseAnalysis = (analysisJson: Partial<DocumentAnalysisResult>) => {
-    const prefill: AnalysisPrefill = {};
-    if (analysisJson.recommendedLetterType)
-      prefill.letterType = analysisJson.recommendedLetterType;
-    if (analysisJson.recommendedResponseSummary)
-      prefill.subject = analysisJson.recommendedResponseSummary.slice(0, 200);
-    const jurisdictionCode = resolveJurisdictionCode(
-      analysisJson.detectedJurisdiction
-    );
-    if (jurisdictionCode) prefill.jurisdictionState = jurisdictionCode;
-    if (analysisJson.detectedParties?.senderName)
-      prefill.senderName = analysisJson.detectedParties.senderName;
-    if (analysisJson.detectedParties?.recipientName)
-      prefill.recipientName = analysisJson.detectedParties.recipientName;
-    if (analysisJson.summary)
-      prefill.description = analysisJson.summary.slice(0, 600);
-    try {
-      sessionStorage.setItem(ANALYZE_PREFILL_KEY, JSON.stringify(prefill));
-    } catch {
-      /* ignore */
-    }
-    navigate("/submit");
-  };
+  // resolveJurisdictionCode + handleUseAnalysis removed 2026-05-20 — they
+  // existed solely to convert a stored DocumentAnalysisResult into an
+  // AnalysisPrefill and route the subscriber to /submit. Restore from
+  // useDocumentAnalyzer.ts (same logic exists there) when re-enabling.
 
   const lettersTotal = letters?.length ?? 0;
   const stats = {
@@ -241,13 +204,9 @@ export default function SubscriberDashboard() {
           />
         </div>
 
-        {(analysesLoading || analysesData !== undefined) && (
-          <AnalysisHistory
-            isLoading={analysesLoading}
-            analyses={analysesData}
-            onUseAnalysis={handleUseAnalysis}
-          />
-        )}
+        {/* AnalysisHistory card removed 2026-05-20 along with the rest of
+            the Doc Analyzer surface. Restore by reverting this Dashboard
+            edit + re-importing AnalysisHistory above. */}
 
         <StatusGuide />
       </div>

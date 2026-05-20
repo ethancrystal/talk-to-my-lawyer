@@ -135,20 +135,64 @@ export async function runDraftingStage(
     pipelineCtx.ragAbGroup = ragAbGroup;
   }
 
-  const draftSystemPromptText = buildDraftingSystemPrompt() + citationRegistryBlock + lessonsBlockDrafting + ragBlock;
-  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
-  // prefix is identical across retries and across letters of the same type, so
-  // subsequent calls within the 5-minute cache window pay reduced input token costs.
-  const draftSystemPrompt = withCacheControl(draftSystemPromptText);
-  // Look up the target word count for this letter type from the shared config
+  // Look up the target word count first since buildDraftingUserPrompt needs it.
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
   const targetWordCount = letterTypeConfig?.targetWordCount ?? 450;
   draftLogger.info({ letterId, targetWordCount, letterType: intake.letterType }, "[Pipeline] Stage 2: target word count determined");
-  const draftUserPrompt = buildDraftingUserPrompt(
-    normalizedIntake,
-    targetWordCount,
-    research
+
+  // Build prompts. Markdown templates loaded via loadPrompt — fail fast and
+  // mark the workflow job permanently failed if the runtime image is missing
+  // the prompt assets (BUILD_ARTIFACT_MISSING).
+  let draftSystemPromptText: string;
+  let draftUserPrompt: string;
+  try {
+    draftSystemPromptText = buildDraftingSystemPrompt();
+    draftUserPrompt = buildDraftingUserPrompt(
+      normalizedIntake,
+      targetWordCount,
+      research
+    );
+  } catch (promptErr) {
+    const promptMsg =
+      promptErr instanceof Error ? promptErr.message : String(promptErr);
+    const promptErrCode =
+      promptErr instanceof PipelineError
+        ? promptErr.code
+        : classifyErrorCode(promptErr);
+    draftLogger.error(
+      { err: promptErr, letterId, jobId },
+      "[Pipeline] Stage 2: prompt asset load failed — failing stage permanently"
+    );
+    captureServerException(promptErr, {
+      tags: {
+        pipeline_stage: "drafting",
+        letter_id: String(letterId),
+        error_type: "prompt_asset_failure",
+      },
+      extra: { jobId, errorMessage: promptMsg },
+    });
+    await updateWorkflowJob(jobId, {
+      status: "failed",
+      errorMessage: formatStructuredError(
+        promptErrCode,
+        promptMsg,
+        "drafting",
+        "Failed to load drafting stage prompt asset"
+      ),
+      completedAt: new Date(),
+      responsePayloadJson: { promptAssetFailure: true, errorCode: promptErrCode },
+    });
+    throw promptErr instanceof PipelineError
+      ? promptErr
+      : new PipelineError(promptErrCode, promptMsg, "drafting");
+  }
+
+  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
+  // prefix is identical across retries and across letters of the same type, so
+  // subsequent calls within the 5-minute cache window pay reduced input token costs.
+  const draftSystemPrompt = withCacheControl(
+    draftSystemPromptText + citationRegistryBlock + lessonsBlockDrafting + ragBlock
   );
 
   const draftTokens = createTokenAccumulator();
