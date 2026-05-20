@@ -66,7 +66,7 @@ export default function Footer() {
               <li><Link href="/pricing" className="hover:text-white transition-colors" data-testid="footer-link-pricing">Pricing</Link></li>
               <li><Link href="/blog" className="hover:text-white transition-colors" data-testid="footer-link-blog">Blog</Link></li>
               <li><Link href="/faq" className="hover:text-white transition-colors" data-testid="footer-link-faq">FAQ</Link></li>
-              <li><Link href="/analyze" className="hover:text-white transition-colors" data-testid="footer-link-analyze">Document Analyzer</Link></li>
+              {/* Document Analyzer footer link removed 2026-05-20 — see PublicNav.tsx for context. */}
               <li><Link href="/terms" className="hover:text-white transition-colors" data-testid="footer-link-terms">Terms of Service</Link></li>
               <li><Link href="/privacy" className="hover:text-white transition-colors" data-testid="footer-link-privacy">Privacy Policy</Link></li>
             </ul>

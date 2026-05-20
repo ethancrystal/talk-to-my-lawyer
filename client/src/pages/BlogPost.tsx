@@ -62,7 +62,10 @@ const CATEGORY_CTA: Record<string, { text: string; href: string }> = {
     text: "Protect Your IP Rights",
     href: "/services/intellectual-property-infringement-letter",
   },
-  "document-analysis": { text: "Try the Free Document Analyzer", href: "/analyze" },
+  // "document-analysis" CTA repointed 2026-05-20 — Doc Analyzer disabled,
+  // /analyze redirects to /. Routing the CTA straight to /pricing avoids
+  // the redirect hop and keeps the funnel intact.
+  "document-analysis": { text: "View Our Plans", href: "/pricing" },
   "pricing-and-roi": { text: "View Our Plans", href: "/pricing" },
   general: { text: "Get Your First Letter Free", href: "/" },
 };

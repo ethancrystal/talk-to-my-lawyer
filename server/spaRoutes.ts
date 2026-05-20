@@ -75,17 +75,8 @@ const PUBLIC_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
       "Choose the right plan for your legal needs. Attorney review is included in every plan.",
     ogType: "website",
   },
-  "/analyze": {
-    title:
-      "Free Legal Document Analyzer - Instant Risk Analysis | Talk to My Lawyer",
-    description:
-      "Upload any legal document and get instant automated analysis. Identifies risks, flags important clauses, and recommends attorney-reviewed response letters.",
-    robots: INDEX_ROBOTS,
-    ogTitle: "Free Legal Document Analyzer | Talk to My Lawyer",
-    ogDescription:
-      "Instantly analyze legal documents online and get a path to an attorney-reviewed response letter.",
-    ogType: "website",
-  },
+  // "/analyze" SEO metadata removed 2026-05-20 — Doc Analyzer disabled and
+  // the route now redirects to /. No need to inject meta for a redirect target.
   "/faq": {
     title:
       "Frequently Asked Questions - Legal Letter Service | Talk to My Lawyer",
@@ -223,7 +214,7 @@ const EXACT_SPA_ROUTES = new Set([
   "/faq",
   "/terms",
   "/privacy",
-  "/analyze",
+  // "/analyze" removed 2026-05-20 — see SEO metadata comment above.
   "/blog",
   "/content-calendar",
   "/newsletter-template",

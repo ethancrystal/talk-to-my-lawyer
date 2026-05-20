@@ -10,7 +10,8 @@ const LAST_UPDATED = new Date().toISOString().split("T")[0];
 const STATIC_URLS: { loc: string; changefreq: string; priority: string; lastmod: string }[] = [
   { loc: "/", changefreq: "weekly", priority: "1.0", lastmod: LAST_UPDATED },
   { loc: "/pricing", changefreq: "monthly", priority: "0.9", lastmod: LAST_UPDATED },
-  { loc: "/analyze", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
+  // /analyze removed from sitemap 2026-05-20 — Doc Analyzer disabled; route
+  // now redirects to /. Avoids search engines indexing a redirect target.
   { loc: "/faq", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
   { loc: "/services", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
   { loc: "/blog", changefreq: "weekly", priority: "0.8", lastmod: LAST_UPDATED },

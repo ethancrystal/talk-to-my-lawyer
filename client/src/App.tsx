@@ -3,7 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -53,7 +53,8 @@ import {
   AdminLetterDetailSkeleton,
   AdminAffiliateSkeleton,
   AdminLearningSkeleton,
-  DocumentAnalyzerSkeleton,
+  // DocumentAnalyzerSkeleton intentionally not imported — analyzer feature
+  // temporarily disabled on 2026-05-20 (see /analyze route comment below).
   TemplateGallerySkeleton,
 } from "./components/skeletons";
 
@@ -71,7 +72,8 @@ const FAQ = lazyRetry(() => import("./pages/FAQ"));
 const Terms = lazyRetry(() => import("./pages/Terms"));
 const Privacy = lazyRetry(() => import("./pages/Privacy"));
 const Onboarding = lazyRetry(() => import("./pages/Onboarding"));
-const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
+// DocumentAnalyzer lazy import removed 2026-05-20 — page is intentionally not
+// reachable. Restore with: const DocumentAnalyzer = lazyRetry(() => import("./pages/DocumentAnalyzer"));
 const ClientPortal = lazyRetry(() => import("./pages/ClientPortal"));
 
 const SubscriberDashboard = lazyRetry(() => import("./pages/subscriber/Dashboard"));
@@ -140,10 +142,13 @@ function Router() {
           <Privacy />
         </SuspenseFade>
       </Route>
+      {/* /analyze redirects to home — Doc Analyzer feature temporarily disabled
+          on 2026-05-20 due to a mammoth + @xmldom/xmldom 0.9.x incompatibility.
+          Page component (DocumentAnalyzer), backend documents router, and
+          document_analyses table are intentionally kept intact so this is a
+          single-revert away from being restored once the dep override lands. */}
       <Route path="/analyze">
-        <SuspenseFade fallback={<DocumentAnalyzerSkeleton />}>
-          <DocumentAnalyzer />
-        </SuspenseFade>
+        <Redirect to="/" />
       </Route>
       {/* Public portal: recipient views their letter — no auth required */}
       <Route path="/portal/:token">
