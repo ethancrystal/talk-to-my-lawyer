@@ -1,0 +1,2 @@
+CREATE INDEX "idx_blog_posts_status_published_at" ON "blog_posts" USING btree ("status","published_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "idx_blog_posts_status_category" ON "blog_posts" USING btree ("status","category");

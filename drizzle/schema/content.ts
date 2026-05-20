@@ -32,6 +32,8 @@ export const blogPosts = pgTable("blog_posts", {
 }, (t) => ({
   statusIdx: index("idx_blog_posts_status").on(t.status),
   publishedAtIdx: index("idx_blog_posts_published_at").on(t.publishedAt),
+  statusPublishedAtIdx: index("idx_blog_posts_status_published_at").on(t.status, t.publishedAt.desc()),
+  statusCategoryIdx: index("idx_blog_posts_status_category").on(t.status, t.category),
 }));
 
 export type BlogPost = typeof blogPosts.$inferSelect;
