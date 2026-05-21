@@ -9,7 +9,7 @@
  * Requires DATABASE_URL env var (same one the server uses).
  */
 
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -126,15 +126,17 @@ async function main() {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle(pool);
 
-  if (!fs.existsSync(BLOG_DIR)) { console.error(`blog/ not found at ${BLOG_DIR}`); process.exit(1); }
-
-  const files = fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith(".md")).sort();
+  const entries = await fs.readdir(BLOG_DIR).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === "ENOENT") { console.error(`blog/ not found at ${BLOG_DIR}`); process.exit(1); }
+    throw err;
+  });
+  const files = entries.filter((f) => f.endsWith(".md")).sort();
   console.log(`Found ${files.length} markdown files in blog/\n`);
 
   let created = 0, updated = 0, skipped = 0;
 
   for (const file of files) {
-    const raw = fs.readFileSync(path.join(BLOG_DIR, file), "utf-8");
+    const raw = await fs.readFile(path.join(BLOG_DIR, file), "utf-8");
     const { data, content } = parseFrontmatter(raw);
 
     if (!data.title || !data.slug) {

@@ -58,6 +58,7 @@ export function registerBlogInternalRoutes(app: Express): void {
       );
 
       const data = await getPublishedBlogPosts({ category, limit, offset });
+      res.set("Cache-Control", "public, max-age=300, s-maxage=300");
       res.json(data);
     } catch (err) {
       logger.error({ err: err }, "[blog-internal] /list error:");
@@ -82,6 +83,7 @@ export function registerBlogInternalRoutes(app: Express): void {
         return;
       }
 
+      res.set("Cache-Control", "public, max-age=300, s-maxage=300");
       res.json(post);
     } catch (err) {
       logger.error({ err: err }, "[blog-internal] /post/:slug error:");
