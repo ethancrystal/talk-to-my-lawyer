@@ -3,6 +3,8 @@ import { Bell, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useNotificationsRealtime } from "@/hooks/useLetterRealtime";
 
 const IMPORTANT_NOTIFICATION_TYPES = new Set([
   "free_preview_ready",
@@ -13,10 +15,36 @@ const IMPORTANT_NOTIFICATION_TYPES = new Set([
 ]);
 
 export function NotificationsPanel() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+
+  // Polling kept at 10s (NOT relaxed). The Realtime hook below is subscribed
+  // but currently delivers zero events: client/src/lib/supabase.ts builds the
+  // Supabase client with the anon key only and never calls
+  // `supabase.realtime.setAuth(jwt)`. The RLS policy `notifications_select_own`
+  // gates on `public.app_user_id()`, which reads
+  // `current_setting('app.current_user_id')` — a session GUC set per tRPC
+  // request via `SET LOCAL`, never on Realtime's separate Postgres connection.
+  // Result: every postgres_changes row for notifications fails RLS at the
+  // websocket layer, so the hook is a no-op until either (a) the JWT is
+  // wired into the Realtime client AND a parallel RLS policy bridges
+  // `auth.uid()` to `users.id`, OR (b) the project migrates to broadcast +
+  // private channels with `realtime.broadcast_changes()` from a DB trigger.
+  // Until one of those lands, the 10s poll is what keeps the panel fresh.
   const { data: notifications, isLoading } = trpc.notifications.list.useQuery(
     { unreadOnly: false },
     { refetchInterval: 10000 }
   );
+
+  useNotificationsRealtime({
+    userId: user?.id ?? null,
+    enabled: !!user?.id,
+    onAnyChange: () => {
+      // Invalidate both the panel's list query and any other notifications.*
+      // consumers (e.g. unread counter in the nav) so they refetch.
+      utils.notifications.list.invalidate();
+    },
+  });
 
   const importantNotifications = (notifications ?? [])
     .filter(notification => IMPORTANT_NOTIFICATION_TYPES.has(notification.type))
