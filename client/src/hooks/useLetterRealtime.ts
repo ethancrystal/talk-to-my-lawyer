@@ -173,15 +173,28 @@ export function useReviewQueueRealtime({
 // user_id. Fires `onAnyChange` on every event so the caller can invalidate the
 // trpc.notifications.list query cache.
 //
-// Why this exists: the notifications table is published to supabase_realtime
-// and RLS (notifications_select_own) already restricts events to the user's
-// own rows. The user_id filter below is defense-in-depth + bandwidth saver —
-// the postgres_changes WAL stream is filtered server-side before it even
-// reaches RLS.
+// ⚠️  KNOWN GAP — currently delivers ZERO events:
+//   - client/src/lib/supabase.ts creates the Supabase client with the anon
+//     key only and never calls `supabase.realtime.setAuth(jwt)`. The
+//     websocket connects unauthenticated.
+//   - The `notifications_select_own` RLS policy gates SELECT on
+//     `public.app_user_id()`, which reads `current_setting('app.current_user_id')`
+//     — a session GUC set per tRPC request via `SET LOCAL`, never set on
+//     Realtime's separate Postgres connection.
+//   - Net effect: every postgres_changes row fails RLS at the publication
+//     layer, and the browser never sees an event.
 //
-// Falls back gracefully if Supabase is not configured (VITE_SUPABASE_URL
-// missing) — the calling component should keep a refetchInterval as fallback
-// so it still updates even when realtime is down.
+// The hook is left in place (and a no-op in this state) so the wire-up is
+// already done when one of these fixes lands:
+//   (a) Set the JWT on the Realtime client (`client.realtime.setAuth(jwt)`)
+//       AND add an alternate RLS policy that bridges `auth.uid()` (UUID) to
+//       `users.id` (integer), OR
+//   (b) Migrate to broadcast + private channels driven by a DB trigger
+//       (`realtime.broadcast_changes()` from a per-row notifications trigger),
+//       which sidesteps the RLS-via-replication path entirely.
+//
+// Until one of those is shipped, callers MUST keep a refetchInterval that
+// covers their freshness target — see NotificationsPanel.tsx for an example.
 
 type UseNotificationsRealtimeOptions = {
   /** Local public.users.id (integer). Pass null to disable. */
