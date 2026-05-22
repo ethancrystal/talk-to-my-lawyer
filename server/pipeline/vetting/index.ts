@@ -51,7 +51,9 @@ import {
   calculateCost,
   MODEL_PRICING,
   withCacheControl,
+  extractCacheStats,
 } from "../providers";
+import { buildBloatPhrasesUserBlock } from "../vetting-prompts";
 import {
   validateFinalLetter,
   validateContentConsistency,
@@ -226,12 +228,19 @@ export async function runVettingStage(
     undefined,
     pipelineCtx
   );
-  // Wrap in Anthropic prompt caching — the vetting system prompt (5KB+) is the
-  // largest static prefix in the pipeline. On retry loops (up to 2 retries) the
-  // cache saves ~90% of input token cost for the repeated system block.
+  // System prompt is the STATIC vetting template only (parameterised by
+  // jurisdiction + letterType which are stable for a given letter, so the
+  // bytes hash identically across all calls for that letter and across all
+  // letters that share the same (jurisdiction, letterType) pair). Per-letter
+  // dynamic content (detected bloat phrases, lessons-from-past-reviews,
+  // pre-vet issues, the letter being vetted) lives in the USER prompt so the
+  // system prefix stays cacheable across calls.
+  //
+  // Note: previously this builder embedded `new Date().toLocaleDateString(...)`
+  // which changed the bytes every calendar day — see vetting-prompts.ts for
+  // history. That date is now omitted; the model has its own clock awareness.
   const systemPrompt = withCacheControl(
-    buildVettingSystemPrompt(jurisdiction, letterType, detectedBloat) +
-    lessonsBlockVetting
+    buildVettingSystemPrompt(jurisdiction, letterType)
   );
   const baseUserPrompt = buildVettingUserPrompt(
     assembledLetter,
@@ -239,11 +248,16 @@ export async function runVettingStage(
     research,
     citationRegistry
   );
+  const bloatBlock = buildBloatPhrasesUserBlock(detectedBloat);
   const preVetBlock =
     preVetIssues.length > 0
       ? `\n\n## PRE-VET ISSUES DETECTED (MUST FIX)\n${preVetIssues.map((issue, i) => `${i + 1}. ${issue}`).join("\n")}\n`
       : "";
-  const userPrompt = baseUserPrompt + preVetBlock;
+  // Order: per-letter context first (lessons + bloat), then the letter
+  // itself + final-vet issues. Lessons and bloat are framing for the
+  // analysis the model is about to do.
+  const userPrompt =
+    lessonsBlockVetting + bloatBlock + baseUserPrompt + preVetBlock;
 
   const vettingTokens = createTokenAccumulator();
   let vettingProvider = "openai";
@@ -261,28 +275,36 @@ export async function runVettingStage(
         "Stage 4 (vetting retry)",
         letterId,
         async () => {
-          const { text, usage: vettingUsage } = await generateText({
+          const r = await generateText({
             model: getVettingModel(),
             system: systemPrompt,
             prompt: promptWithFeedback,
             maxOutputTokens: 16000,
             abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
           });
-          accumulateTokens(vettingTokens, vettingUsage);
-          return text;
+          accumulateTokens(vettingTokens, r.usage);
+          logger.info(
+            { letterId, provider: "retry-primary", ...extractCacheStats(r) },
+            "[Pipeline] Stage 4: cache stats"
+          );
+          return r.text;
         },
         async () => {
           vettingProvider = "anthropic-failover";
           vettingModelKey = "claude-sonnet-4-6-20250514";
-          const { text, usage: vettingUsage } = await generateText({
+          const r = await generateText({
             model: getVettingModelFallback(),
             system: systemPrompt,
             prompt: promptWithFeedback,
             maxOutputTokens: 16000,
             abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
           });
-          accumulateTokens(vettingTokens, vettingUsage);
-          return text;
+          accumulateTokens(vettingTokens, r.usage);
+          logger.info(
+            { letterId, provider: "retry-anthropic-fallback", ...extractCacheStats(r) },
+            "[Pipeline] Stage 4: cache stats"
+          );
+          return r.text;
         }
       );
     if (retryFailover && pipelineCtx) {
@@ -316,6 +338,10 @@ export async function runVettingStage(
             abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
           }).then(r => {
             accumulateTokens(vettingTokens, r.usage);
+            logger.info(
+              { letterId, provider: "initial-primary", ...extractCacheStats(r) },
+              "[Pipeline] Stage 4: cache stats"
+            );
             return r.text;
           });
         },
@@ -330,6 +356,10 @@ export async function runVettingStage(
             abortSignal: AbortSignal.timeout(VETTING_TIMEOUT_MS),
           }).then(r => {
             accumulateTokens(vettingTokens, r.usage);
+            logger.info(
+              { letterId, provider: "initial-anthropic-fallback", ...extractCacheStats(r) },
+              "[Pipeline] Stage 4: cache stats"
+            );
             return r.text;
           });
         }

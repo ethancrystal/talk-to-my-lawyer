@@ -56,22 +56,37 @@ export function detectBloatPhrases(text: string): string[] {
 
 // ─── Prompt Builders ──────────────────────────────────────────────────────────
 
+/**
+ * Renders the per-letter "detected bloat phrases" block.
+ *
+ * Pulled OUT of the system prompt (2026-05-21) so the system prompt stays
+ * byte-stable across letters — letting Anthropic prompt-caching and OpenAI
+ * automatic prefix caching actually hit. The bloat block belongs in the
+ * user message as per-letter context, not in the cached prefix.
+ *
+ * Returns "" when the array is empty so callers can unconditionally concat.
+ */
+export function buildBloatPhrasesUserBlock(detectedBloat: string[]): string {
+  if (detectedBloat.length === 0) return "";
+  return `\n\n## DETECTED BLOAT PHRASES — MANDATORY REMOVAL
+The following AI-typical filler phrases were detected in the letter. You MUST remove or replace ALL of them:
+${detectedBloat.map((p, i) => `${i + 1}. "${p}"`).join("\n")}
+Replace each with direct, substantive legal language or remove the sentence entirely if it adds nothing.\n`;
+}
+
 export function buildVettingSystemPrompt(
   jurisdiction: string,
   letterType: string,
-  detectedBloat: string[],
 ): string {
-  const bloatSection = detectedBloat.length > 0
-    ? `\n## DETECTED BLOAT PHRASES — MANDATORY REMOVAL
-The following AI-typical filler phrases were detected in the letter. You MUST remove or replace ALL of them:
-${detectedBloat.map((p, i) => `${i + 1}. "${p}"`).join("\n")}
-Replace each with direct, substantive legal language or remove the sentence entirely if it adds nothing.\n`
-    : "";
-
+  // IMPORTANT: this string must be byte-stable for a given (jurisdiction, letterType)
+  // pair across calls. Do NOT interpolate Date.now(), retry counters, per-letter IDs,
+  // or any other dynamic value here — that silently invalidates the prompt cache.
+  // Per-letter context (detected bloat, lessons, pre-vet issues, the letter being
+  // vetted) is concatenated into the USER prompt at the call site.
   return `You are the head of quality control at a premier law firm. You specialize in ${jurisdiction} law.
 Your role is to perform a FINAL VETTING of a legal letter before it reaches the reviewing attorney.
 You are deeply knowledgeable about ${jurisdiction} statutes, case law, local ordinances, enforcement
-climate, and geopolitical context. Today's date is ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.
+climate, and geopolitical context.
 
 ## Your Vetting Standards
 
@@ -114,7 +129,7 @@ climate, and geopolitical context. Today's date is ${new Date().toLocaleDateStri
 - Remove hedging language ("may", "might", "could potentially", "it is possible that").
 - Replace vague references ("under applicable law", "pursuant to relevant statutes") with
   specific citations or remove entirely.
-${bloatSection}
+
 ### 6. FACTUAL CONSISTENCY
 - Verify sender and recipient names are correct throughout the letter.
 - Verify addresses, dates, and amounts are consistent with the intake data.
