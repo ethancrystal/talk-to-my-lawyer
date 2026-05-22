@@ -155,20 +155,24 @@ export function buildAssemblyUserPrompt(
 /**
  * Stage 4: Vetting Prompts
  */
+/**
+ * NOTE: This `loadPrompt`-backed builder is currently unused at runtime — the
+ * production vetting code path imports `buildVettingSystemPrompt` from
+ * `../vetting-prompts.ts` directly. This copy is kept in sync with the
+ * markdown template `prompts/vetting-system.md` so that if anything is ever
+ * wired to load from disk it inherits the same cacheability discipline.
+ *
+ * Specifically: NO `today: new Date()` and NO per-letter `detectedBloat`
+ * embedding. Both belong in the user prompt (see `buildBloatPhrasesUserBlock`
+ * in `vetting-prompts.ts`), not the cached system prefix.
+ */
 export function buildVettingSystemPrompt(
   jurisdiction: string,
   letterType: string,
-  detectedBloat: string[],
 ): string {
-  const bloatSection = detectedBloat.length > 0
-    ? `\n## DETECTED BLOAT PHRASES — MANDATORY REMOVAL\nThe following AI-typical filler phrases were detected in the letter. You MUST remove or replace ALL of them:\n${detectedBloat.map((p, i) => `${i + 1}. "${p}"`).join("\n")}\nReplace each with direct, substantive legal language or remove the sentence entirely if it adds nothing.\n`
-    : "";
-
   return loadPrompt("vetting-system.md", {
     jurisdiction,
     letterType,
-    today: new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-    bloatSection
   });
 }
 

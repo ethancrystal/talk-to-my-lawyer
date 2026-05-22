@@ -11,7 +11,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
 
-import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl } from "./providers";
+import { getAssemblyModel, getAssemblyModelFallback, getFreeOSSModelFallback, ASSEMBLY_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl, extractCacheStats } from "./providers";
 
 import { validateFinalLetter, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock } from "./citations";
@@ -109,13 +109,16 @@ export async function runAssemblyStage(
       : new PipelineError(promptErrCode, promptMsg, "assembly");
   }
 
-  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
-  // prefix is identical across retries, so subsequent calls within the 5-minute
-  // cache window pay reduced input token costs.
-  const assemblySystem = withCacheControl(
-    assemblySystemBaseText + citationRegistryBlock + lessonsBlockAssembly
-  );
-  const assemblyUser = assemblyUserBaseText + vettingFeedbackBlock;
+  // System prompt is the STATIC assembly template only. Per-letter dynamic
+  // content (citation registry, lessons-from-past-reviews, vetting-feedback
+  // from the previous attempt) is appended to the USER prompt below so the
+  // system prefix stays byte-stable across calls — that's the prerequisite
+  // for Anthropic prompt-caching AND OpenAI gpt-4o automatic prefix-caching
+  // to actually hit.
+  const assemblySystem = withCacheControl(assemblySystemBaseText);
+  const assemblyUserContextBlock = citationRegistryBlock + lessonsBlockAssembly;
+  const assemblyUser =
+    assemblyUserContextBlock + assemblyUserBaseText + vettingFeedbackBlock;
 
   const { LETTER_TYPE_CONFIG } = await import("../../shared/types");
   const letterTypeConfig = LETTER_TYPE_CONFIG[intake.letterType];
@@ -142,6 +145,10 @@ export async function runAssemblyStage(
           abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
         });
         accumulateTokens(assemblyTokens, r.usage);
+        assemblyLogger.info(
+          { letterId, provider: "retry-primary", ...extractCacheStats(r) },
+          "[Pipeline] Stage 3: cache stats"
+        );
         return r;
       },
       async () => {
@@ -155,6 +162,10 @@ export async function runAssemblyStage(
           abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
         });
         accumulateTokens(assemblyTokens, r.usage);
+        assemblyLogger.info(
+          { letterId, provider: "retry-anthropic-fallback", ...extractCacheStats(r) },
+          "[Pipeline] Stage 3: cache stats"
+        );
         return r;
       },
       async () => {
@@ -168,7 +179,7 @@ export async function runAssemblyStage(
           abortSignal: AbortSignal.timeout(ASSEMBLY_TIMEOUT_MS),
         });
         accumulateTokens(assemblyTokens, r.usage);
-        return r;
+        return r; // Groq doesn't expose cache stats.
       }
     );
     if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
@@ -275,6 +286,14 @@ export async function runAssemblyStage(
     }
 
     accumulateTokens(assemblyTokens, firstAssemblyResult.usage);
+    assemblyLogger.info(
+      {
+        letterId,
+        provider: initialAssemblyProvider,
+        ...extractCacheStats(firstAssemblyResult),
+      },
+      "[Pipeline] Stage 3: cache stats"
+    );
     let rawFinalLetter = firstAssemblyResult.text;
 
     let checks = runAllAssemblyValidations(rawFinalLetter);

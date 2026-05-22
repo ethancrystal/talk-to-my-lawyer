@@ -77,6 +77,41 @@ export function withRawCacheControl(systemPrompt: string): Array<{
   ];
 }
 
+/**
+ * Reads cache telemetry from a Vercel AI SDK `generateText` result.
+ *
+ * - Anthropic exposes `cacheCreationInputTokens` (first call that writes the
+ *   cache) and `cacheReadInputTokens` (subsequent hits) under
+ *   `providerMetadata.anthropic.*`. Both come from the Anthropic SDK's usage
+ *   block and are present even when the request *didn't* hit cache — they're
+ *   just zero.
+ * - OpenAI's gpt-4o has automatic prefix caching (prefixes ≥1024 tokens
+ *   reused within ~5-10 minutes get a discount) — the cached prompt tokens
+ *   are exposed via `providerMetadata.openai.cachedPromptTokens`.
+ *
+ * Returns a loggable object suitable for `logger.info({ ...extractCacheStats(r), ... }, "...")`.
+ * Undefined fields are kept (rather than stripped) so the log shape is stable
+ * across providers — you can see at-a-glance "OpenAI didn't expose cache" vs
+ * "Anthropic returned zero hits".
+ */
+export function extractCacheStats(result: {
+  providerMetadata?: Record<string, Record<string, unknown> | undefined>;
+}): {
+  anthropicCacheCreate: number | undefined;
+  anthropicCacheRead: number | undefined;
+  openaiCachedPrompt: number | undefined;
+} {
+  const anthropic = result.providerMetadata?.anthropic;
+  const openai = result.providerMetadata?.openai;
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" ? v : undefined;
+  return {
+    anthropicCacheCreate: num(anthropic?.cacheCreationInputTokens),
+    anthropicCacheRead: num(anthropic?.cacheReadInputTokens),
+    openaiCachedPrompt: num(openai?.cachedPromptTokens),
+  };
+}
+
 // ── OpenAI — used as backup/failover model for all stages ──
 export function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;

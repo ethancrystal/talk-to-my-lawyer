@@ -15,7 +15,7 @@ import { captureServerException } from "../sentry";
 import { createLogger } from "../logger";
 
 import { formatStructuredError, classifyErrorCode, withModelFailover } from "./shared";
-import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl } from "./providers";
+import { getDraftModel, getDraftModelFallback, getFreeOSSModelFallback, DRAFT_TIMEOUT_MS, createTokenAccumulator, accumulateTokens, calculateCost, withCacheControl, extractCacheStats } from "./providers";
 import { parseAndValidateDraftLlmOutput, validateDraftGrounding, validateContentConsistency, retryOnValidationFailure, addValidationResult } from "./validators";
 import { buildCitationRegistryPromptBlock, buildCitationRegistry } from "./citations";
 import { buildLessonsPromptBlock } from "./shared";
@@ -188,12 +188,18 @@ export async function runDraftingStage(
       : new PipelineError(promptErrCode, promptMsg, "drafting");
   }
 
-  // Wrap in Anthropic prompt caching — the static template + citation registry + lessons
-  // prefix is identical across retries and across letters of the same type, so
-  // subsequent calls within the 5-minute cache window pay reduced input token costs.
-  const draftSystemPrompt = withCacheControl(
-    draftSystemPromptText + citationRegistryBlock + lessonsBlockDrafting + ragBlock
-  );
+  // System prompt is the STATIC drafting template only. Per-letter dynamic
+  // content (citation registry, lessons-from-past-reviews, RAG examples) is
+  // appended to the USER prompt below so the system prefix stays byte-stable
+  // across calls — that's the prerequisite for Anthropic prompt-caching AND
+  // OpenAI gpt-4o automatic prefix-caching to actually hit.
+  const draftSystemPrompt = withCacheControl(draftSystemPromptText);
+
+  // Per-letter context that previously fragmented the system prompt. The
+  // ragBlock may be empty (Math.random A/B control group) — that no longer
+  // matters now that it's in the user message, not the cached prefix.
+  const draftUserContextBlock =
+    citationRegistryBlock + lessonsBlockDrafting + ragBlock;
 
   const draftTokens = createTokenAccumulator();
   let draftProvider = "openai";
@@ -203,11 +209,15 @@ export async function runDraftingStage(
     const result = await generateText({
       model: getDraftModel(),
       system: draftSystemPrompt,
-      prompt,
+      prompt: draftUserContextBlock + prompt,
       maxOutputTokens: 8000,
       abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
     });
     accumulateTokens(draftTokens, result.usage);
+    draftLogger.info(
+      { letterId, provider: "primary", ...extractCacheStats(result) },
+      "[Pipeline] Stage 2: cache stats"
+    );
     return result;
   };
 
@@ -215,18 +225,24 @@ export async function runDraftingStage(
     const result = await generateText({
       model: getDraftModelFallback(),
       system: draftSystemPrompt,
-      prompt,
+      prompt: draftUserContextBlock + prompt,
       maxOutputTokens: 8000,
       abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
     });
     accumulateTokens(draftTokens, result.usage);
+    draftLogger.info(
+      { letterId, provider: "anthropic-fallback", ...extractCacheStats(result) },
+      "[Pipeline] Stage 2: cache stats"
+    );
     return result;
   };
 
   const generateDraft = async (errorFeedback?: string): Promise<{ text: string }> => {
+    // Same per-letter context prefix the primary call uses, so retries keep
+    // identical (cacheable) system bytes while only the user message changes.
     const promptWithFeedback = errorFeedback
-      ? draftUserPrompt + errorFeedback
-      : draftUserPrompt;
+      ? draftUserContextBlock + draftUserPrompt + errorFeedback
+      : draftUserContextBlock + draftUserPrompt;
     const { result, provider: retryProvider, failoverTriggered: retryFailover } = await withModelFailover(
       "Stage 2 (drafting retry)",
       letterId,
@@ -239,6 +255,10 @@ export async function runDraftingStage(
           abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
         });
         accumulateTokens(draftTokens, r.usage);
+        draftLogger.info(
+          { letterId, provider: "retry-primary", ...extractCacheStats(r) },
+          "[Pipeline] Stage 2: cache stats"
+        );
         return r;
       },
       async () => {
@@ -252,6 +272,10 @@ export async function runDraftingStage(
           abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
         });
         accumulateTokens(draftTokens, r.usage);
+        draftLogger.info(
+          { letterId, provider: "retry-anthropic-fallback", ...extractCacheStats(r) },
+          "[Pipeline] Stage 2: cache stats"
+        );
         return r;
       },
       async () => {
@@ -265,7 +289,7 @@ export async function runDraftingStage(
           abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
         });
         accumulateTokens(draftTokens, r.usage);
-        return r;
+        return r; // Groq doesn't expose cache stats; nothing to log.
       }
     );
     if (retryProvider === "groq-oss-fallback" && pipelineCtx) {
@@ -324,7 +348,7 @@ export async function runDraftingStage(
         const r = await generateText({
           model: getFreeOSSModelFallback(),
           system: draftSystemPrompt,
-          prompt: draftUserPrompt,
+          prompt: draftUserContextBlock + draftUserPrompt,
           maxOutputTokens: 8000,
           abortSignal: AbortSignal.timeout(DRAFT_TIMEOUT_MS),
         });
