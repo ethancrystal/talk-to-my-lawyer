@@ -3,6 +3,8 @@ import { Bell, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useNotificationsRealtime } from "@/hooks/useLetterRealtime";
 
 const IMPORTANT_NOTIFICATION_TYPES = new Set([
   "free_preview_ready",
@@ -13,10 +15,26 @@ const IMPORTANT_NOTIFICATION_TYPES = new Set([
 ]);
 
 export function NotificationsPanel() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+
+  // Realtime now provides instant updates on insert/update/delete; the
+  // refetchInterval is relaxed from 10s to 60s as a fallback for the case
+  // where Supabase Realtime is unavailable (e.g. VITE_SUPABASE_URL unset).
   const { data: notifications, isLoading } = trpc.notifications.list.useQuery(
     { unreadOnly: false },
-    { refetchInterval: 10000 }
+    { refetchInterval: 60000 }
   );
+
+  useNotificationsRealtime({
+    userId: user?.id ?? null,
+    enabled: !!user?.id,
+    onAnyChange: () => {
+      // Invalidate both the panel's list query and any other notifications.*
+      // consumers (e.g. unread counter in the nav) so they refetch.
+      utils.notifications.list.invalidate();
+    },
+  });
 
   const importantNotifications = (notifications ?? [])
     .filter(notification => IMPORTANT_NOTIFICATION_TYPES.has(notification.type))
