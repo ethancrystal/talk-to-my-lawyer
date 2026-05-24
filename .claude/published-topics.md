@@ -44,3 +44,10 @@ Agent: check this file before writing to avoid duplicate topics.
 - How Homeowners Can Hold Licensed Contractors Accountable Without Going to Court in California
 - Filing a CSLB Complaint vs. Sending a Demand Letter: Which Gets Your Money Back Faster in California?
 - The Complete Guide to Contractor Disputes and Construction Defect Claims in California (pillar)
+
+
+## 2026-05-24
+- I'm Owed Money But Don't Want to Sue — What Are My Real Options in California?
+- Demand Letter vs. Cease and Desist vs. Settlement Letter: Which One Do You Actually Need?
+- When Does Hiring a Lawyer for a Demand Letter Pay for Itself? A California Small Business Guide
+- Collections Agency vs. Attorney Demand Letter: Which Recovers More of Your Money in California?
