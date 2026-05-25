@@ -51,3 +51,5 @@ Agent: check this file before writing to avoid duplicate topics.
 - Demand Letter vs. Cease and Desist vs. Settlement Letter: Which One Do You Actually Need?
 - When Does Hiring a Lawyer for a Demand Letter Pay for Itself? A California Small Business Guide
 - Collections Agency vs. Attorney Demand Letter: Which Recovers More of Your Money in California?
+  
+- When Do You Need a Legal Demand Letter? (pillar) 
