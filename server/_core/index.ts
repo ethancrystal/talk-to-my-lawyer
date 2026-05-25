@@ -48,6 +48,7 @@ import { registerPaywallEmailRoute } from "../paywallEmailCron";
 import { registerFreePreviewEmailRoute } from "../freePreviewEmailCron";
 import { registerDraftPdfRoute } from "../draftPdfRoute";
 import { registerBlogInternalRoutes } from "../blogInternalRoutes";
+import { registerBlogPublishRoute } from "../blogPublishRoute";
 import { registerSitemapRoute } from "../sitemapRoute";
 import { registerNewsletterRoute } from "../newsletterRoute";
 import { registerConfigRoute } from "../configRoute";
@@ -338,6 +339,7 @@ async function startServer() {
   );
   // Body parser — 12 MB cap: 7.5 MB actual file base64-encodes to ~10 MB, plus JSON envelope overhead
   app.use(express.json({ limit: "12mb" }));
+  app.use(express.text({ limit: "12mb", type: ["text/markdown", "text/plain"] }));
   app.use(express.urlencoded({ limit: "12mb", extended: true }));
 
   // ─── Rate Limiting ──────────────────────────────────────────────────────────
@@ -355,6 +357,7 @@ async function startServer() {
   registerFreePreviewEmailRoute(app);
   registerDraftPdfRoute(app);
   registerBlogInternalRoutes(app);
+  registerBlogPublishRoute(app);
   registerSitemapRoute(app);
   registerNewsletterRoute(app);
   registerConfigRoute(app);

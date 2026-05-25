@@ -58,6 +58,8 @@ export const ENV = {
   // Cloudflare Worker — PDF generation (optional — falls back to local Puppeteer if not set)
   pdfWorkerUrl: process.env.PDF_WORKER_URL ?? "",
   pdfWorkerSecret: process.env.PDF_WORKER_SECRET ?? "",
+  // Blog Publish API (optional — endpoint is open when not set)
+  blogPublishApiKey: process.env.BLOG_PUBLISH_API_KEY ?? "",
   // GCP / Vertex AI / GCS (optional — training capture & fine-tuning)
   gcpProjectId: process.env.GCP_PROJECT_ID ?? "",
   gcpRegion: process.env.GCP_REGION ?? "",
