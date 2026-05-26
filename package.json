@@ -93,7 +93,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-helmet-async": "^3.0.0",
-    "resend": "^6.12.3",
+    "resend": "^6.12.4",
     "sonner": "^2.0.7",
     "stripe": "^22.1.1",
     "superjson": "^2.2.6",
