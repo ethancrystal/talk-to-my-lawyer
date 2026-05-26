@@ -65,3 +65,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - The Small Landlord's Legal Playbook for Rent Disputes in California (LONG)
 - 3-Day Notice vs. Demand Letter vs. Eviction in California: The Full Breakdown (Costs, Timelines, and What Actually Works) (LONG)
 - California Tenant Non-Payment: Laws, Landlord Rights, and What the Numbers Actually Show (LONG)
+
+
+## 2026-05-26
+- Can a Lawyer Send a Warning Letter to My Landlord in California? (SHORT)
+- Can I Hire a Lawyer Just to Write One Letter for Me in California? (SHORT)
+- Can I Write My Own Demand Letter or Do I Need a Lawyer in California? (SHORT)
+- What Is a Final Demand Letter Before Legal Action in California? (SHORT)
+- What Is a Legal Letter to Get Money Back in California? (SHORT)
+- How to Write a Demand Letter in California: A Step-by-Step Guide (LONG)
+- How Much Does a Demand Letter Cost in California? The Full Breakdown (2026) (LONG)
+- What Happens When You Send a Demand Letter From a Lawyer in California? The Full Timeline (LONG)
+- How to Write a Letter to Someone Who Owes You Money: The California Playbook (LONG)
+- The Common Mistakes That Kill Settlement Letters in California (And How to Avoid Them) (LONG)
