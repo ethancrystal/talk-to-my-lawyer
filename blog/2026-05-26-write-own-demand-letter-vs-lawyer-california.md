@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: demand-letters
 tags: ["demand letter", "california", "diy", "self-help legal"]
 status: published
+og_image_url: auto:generate
 ---
 
 You can absolutely write your own demand letter in California. Nothing in state law requires an attorney signature for a pre-litigation demand. People send their own letters every day and get paid. The harder question is whether your own letter will actually work — and that depends entirely on who's reading it.
@@ -43,6 +44,19 @@ A few specific signals shift the math:
 **The recipient is a business with a legal department.** An in-house counsel reading a self-written tenant or freelancer letter rarely treats it as serious. The same counsel reading a letter from another lawyer treats it as an opening move in a negotiation.
 
 **The dispute is over $5,000.** Past a certain dollar threshold, the cost of the letter is rounding error against the upside. A $199 letter to recover $8,000 is a 2.5% transaction cost. That's cheap.
+
+> **California Code of Civil Procedure § 116.220** — Small claims jurisdiction caps natural-person claims at **$12,500**. That cap matters for the DIY decision: under $12,500, you'll be in small claims with no attorneys at all, so an attorney letter is purely a pre-filing leverage move — not a courtroom move. Over $12,500, the dispute heads to civil court, where the same opposing party will face actual litigation costs and an attorney letter signals real exposure.
+
+## DIY vs. attorney letter — the decision matrix
+
+| Your situation | Pick this |
+|---|---|
+| Under $1,000, responsive other side | **DIY letter** (free, certified mail $9) |
+| $1,000–$5,000, party who already ghosted you | **Attorney letter** ($199) |
+| $5,000–$25,000, any opposing party | **Attorney letter** — math always works |
+| $25,000+, complex facts | **Attorney letter** first, traditional firm if escalating |
+| Other side is a business with in-house counsel | **Attorney letter**, regardless of amount |
+| Other side already paid most of what's owed | **DIY letter** — preserve the relationship |
 
 ## The math, plainly
 

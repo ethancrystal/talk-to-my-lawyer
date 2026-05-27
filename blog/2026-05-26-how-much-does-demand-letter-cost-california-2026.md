@@ -8,11 +8,23 @@ author: "Talk to My Lawyer Team"
 category: pricing-and-roi
 tags: ["pricing", "demand letter", "california", "legal fees", "cost"]
 status: published
+og_image_url: auto:generate
 ---
 
 A demand letter in California costs anywhere from zero dollars to about $2,000. That spread isn't because some letters are twenty times more powerful than others — most working demand letters look structurally similar. The spread is because the legal industry sells the same product through four different billing models, and the difference between $0 and $2,000 is which model you bought from.
 
 **Short answer:** California demand letters cost $0 (DIY), $25–$50 (online template service), $150–$300 (flat-fee unbundled service like TTML), or $500–$2,000+ (hourly traditional firm). The right price depends entirely on the dispute amount, the opposing party, and how clean the legal theory is.
+
+> **California Code of Civil Procedure § 116.230** — The court filing fee a demand letter is implicitly compared against. Small claims fees range from **$30** (claims under $1,500) to **$75** (claims $5,000–$10,000) to **$100** (claims $10,000+ filed by frequent filers). Add lost-wages for a hearing day and your effective small-claims cost is $200–$500 — which is the cost bar any demand letter needs to clear to be the cheaper move.
+
+## The four pricing models at a glance
+
+| Model | Cost | Attorney involved? | Letterhead | Statute cite | Resolution rate | Sweet spot |
+|---|---|---|---|---|---|---|
+| **DIY** | $0–$15 | No | Yours | If you research it | 20–35% | Under $1,000 |
+| **Online template** | $25–$50 | No | Generic | Generic | ~30% | Under $2,000 |
+| **Flat-fee unbundled (TTML)** | $150–$300 | Yes, licensed CA atty | Law firm | Always | 60–70% | $1,000–$25,000 |
+| **Traditional firm hourly** | $500–$2,000+ | Yes, partner + associate | Firm name | Always | 65–75% | $75,000+ |
 
 ## The four pricing models
 
@@ -102,6 +114,16 @@ Compared to a collections agency, the demand letter is meaningfully cheaper. Col
 
 For the underlying question of whether hiring a lawyer for any single piece of legal work pays for itself, see [When Does Hiring a Lawyer for a Demand Letter Pay for Itself?](/blog/when-does-hiring-lawyer-demand-letter-pay-for-itself-california-small-business). For the broader pricing of legal services in California, see [How Much Does It Cost to Hire a Lawyer in California](/blog/how-much-does-it-cost-to-hire-a-lawyer-california).
 
+## The decision tree, day by day
+
+- **Day 0** — Sit down. Pull the contract. Calculate exact damages including 10% interest under Civ. Code § 3289.
+- **Day 1** — Categorize the dispute by the table above. Pick the model where expected recovery > cost.
+- **Day 2** — DIY: draft and send. Template: buy and customize. Flat-fee: 10-min intake form. Traditional firm: schedule consultation.
+- **Day 3–7** — Letter mailed (timing varies by model — DIY mails same-day; flat-fee turns in ~5 business days; firms take 1–3 weeks).
+- **Day 10–15** — Recipient receives. Deadline clock starts.
+- **Day 25–35** — Deadline passes. Pay, negotiate, or decide to escalate.
+- **Day 35+** — If unresolved, decision: small claims, civil suit, or accept the loss.
+
 ## Picking the right model
 
 A simple decision framework:
@@ -113,6 +135,13 @@ A simple decision framework:
 - Dispute over $75,000 → traditional firm from the start.
 
 Most of the cases we see at TTML fall in the $1,000-$25,000 range, which is the sweet spot for unbundled work. Smaller disputes don't justify attorney fees; larger ones often justify hourly engagement from the start.
+
+## Keep reading
+
+- [Can I Hire a Lawyer Just to Write One Letter for Me in California?](/blog/hire-lawyer-just-to-write-one-letter-california) — the unbundled-legal-services rule that makes flat-fee work.
+- [How to Write a Demand Letter in California: A Step-by-Step Guide](/blog/how-to-write-demand-letter-california-step-by-step) — the seven sections, written out.
+- [What Happens When You Send a Demand Letter From a Lawyer in California?](/blog/what-happens-when-you-send-a-demand-letter-from-a-lawyer-california) — what the $199 actually buys, day by day.
+- [Can I Write My Own Demand Letter or Do I Need a Lawyer?](/blog/write-own-demand-letter-vs-lawyer-california) — the three-input math behind the pick.
 
 ## Bottom line
 

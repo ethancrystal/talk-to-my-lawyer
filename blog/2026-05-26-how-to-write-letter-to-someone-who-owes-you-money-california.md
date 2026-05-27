@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: debt-collection
 tags: ["debt collection", "demand letter", "california", "owed money", "playbook"]
 status: published
+og_image_url: auto:generate
 ---
 
 The instinct, when someone owes you money and won't pay, is to write them a long emotional letter explaining how they've wronged you. Don't. The letter that recovers money looks almost nothing like that. It is short, factual, and quietly menacing in the specific sense that it tells the reader exactly what happens to them next if they don't pay. This is the playbook for the version that works.
@@ -33,6 +34,8 @@ Before drafting, run a 10-minute sanity check on three questions:
 **Is the debtor collectible?** Winning a judgment against someone with no income and no assets produces a piece of paper you can't enforce. If the debtor has lost their job, declared bankruptcy, or moved out of state, the math may not work. Look them up on California's online court records (accessible through individual county superior court websites) to see if they have prior judgments — multiple unpaid judgments signals a judgment-proof debtor.
 
 If any of those three checks fails, the letter strategy needs adjustment, or another approach altogether. Don't spend $9 on certified mail to chase a debt that can't be collected.
+
+> **California Code of Civil Procedure § 337 & § 339** — **§ 337** gives you **four years** to sue on a written contract. **§ 339** gives you **two years** on an oral contract. After the clock runs out, the debt is uncollectable in court — the letter still works as social pressure but loses the legal threat that makes it dangerous. Always confirm the dates before drafting.
 
 ## Step 2: Pull the documents
 
@@ -87,6 +90,27 @@ A few items convert a working letter into a liability:
 
 **Threats you won't follow through on.** If you threaten to file suit in 21 days, file the suit in 21 days. Otherwise you train this debtor — and future debtors — that your letters are bluffs.
 
+## The seven-section structure at a glance
+
+| Section | Length | Job |
+|---|---|---|
+| **Header** | 4–6 lines | Identify both parties, dispute, dollar amount |
+| **Opening** | 3–4 sentences | State this is formal demand; reference prior unanswered contact |
+| **Facts** | 3–5 short paragraphs | Chronological, names, dates, amounts. No adjectives. |
+| **Legal basis** | 1–3 paragraphs | Cite the statute. Apply to the facts in one sentence. |
+| **Demand** | 1 short paragraph | Exact total — principal + interest + costs |
+| **Deadline** | 1 sentence | Specific date, 14–21 days out. Not "within 14 days." |
+| **Consequence** | 1 paragraph | The specific lawsuit, the specific court, the recoverable damages |
+
+## The day-by-day playbook after mailing
+
+- **Day 0** — Certified letter dropped at USPS counter. Green-card tracking enabled.
+- **Day 3–7** — Delivery confirmed via green card. Letter is now legally noticed.
+- **Day 7–20** — Wait window. No reminders. No follow-up emails. The silence is a feature.
+- **Day 14–21** — Most-likely settlement window. Calls, counter-offers, or payment arrives.
+- **Day 21** — Deadline. Pay, negotiate, or escalate.
+- **Day 22–30** — Decision point. File suit, send final demand, or close the matter.
+
 ## Step 6: Send it correctly
 
 USPS certified mail with return receipt requested. $9 at the counter. This produces a green card with the recipient's signature confirming delivery on a specific date. Save the green card with your copy of the letter. Both become evidence if you litigate.
@@ -114,6 +138,13 @@ A few scenarios where letters underperform:
 - The debtor has filed for bankruptcy. The automatic stay under 11 U.S.C. § 362 prohibits collection activity, including demand letters. Stop until the bankruptcy resolves.
 - The debt is consumer credit and you're a third-party debt collector. The federal Fair Debt Collection Practices Act and California's Rosenthal Fair Debt Collection Practices Act impose specific disclosure requirements that go beyond the playbook above.
 - The debtor is your former spouse and the debt is community property. Family law has its own framework; demand letters aren't the right tool.
+
+## Keep reading
+
+- [How to Write a Demand Letter in California: A Step-by-Step Guide](/blog/how-to-write-demand-letter-california-step-by-step) — full template walkthrough with example paragraphs.
+- [What Is a Final Demand Letter Before Legal Action in California?](/blog/what-is-final-demand-letter-before-legal-action-california) — the escalation move when the first letter doesn't land.
+- [What Happens When You Send a Demand Letter From a Lawyer in California?](/blog/what-happens-when-you-send-a-demand-letter-from-a-lawyer-california) — the 30-to-90-day arc once the letter is in motion.
+- [The Common Mistakes That Kill Settlement Letters in California](/blog/common-mistakes-that-kill-settlement-letters-california) — the seven failure modes the playbook above is built to dodge.
 
 ## Bottom line
 

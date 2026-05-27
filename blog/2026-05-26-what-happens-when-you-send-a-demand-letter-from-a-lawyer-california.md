@@ -8,11 +8,26 @@ author: "Talk to My Lawyer Team"
 category: demand-letters
 tags: ["demand letter", "timeline", "california", "what happens next"]
 status: published
+og_image_url: auto:generate
 ---
 
 A demand letter from a lawyer isn't an event — it's the opening of a 30-to-90-day process with predictable stages. Most California disputes resolved by attorney letter follow roughly the same arc: intake, drafting, mailing, recipient response, negotiation, settlement. The variations are usually about which stage the dispute gets stuck on. This is the full timeline, stage by stage, with what to expect at each one.
 
 **Short answer:** A California attorney demand letter follows a 30-90 day arc: intake (1-2 days), drafting (3-5 days), recipient receipt and consideration (5-10 days), response (or silence), negotiation (1-3 weeks), and resolution. About 60-70% of disputes resolve before any lawsuit is filed.
+
+> **California Rules of Professional Conduct, Rule 1.2(b)** — Limited-scope representation is explicitly authorized when reasonable and consented to in writing. **California Evidence Code § 1152** — Statements made in genuine settlement negotiations are inadmissible to prove liability. Together, these two rules are what let a single-letter engagement work: bounded scope, protected negotiation.
+
+## The full demand-letter arc — a single timeline
+
+- **Day 0** — Intake. Web form, 10–30 min. Documents uploaded.
+- **Day 1–2** — Attorney review and accept/decline decision. Limited-scope engagement signed.
+- **Day 2–5** — Drafting. Statute identified, facts confirmed, address verified via CA Secretary of State.
+- **Day 5** — Letter signed, mailed certified, copy emailed.
+- **Day 8–12** — Green card returns. Recipient has the letter. Deadline clock starts.
+- **Day 15–25** — Response window. ~60% of resolutions happen here.
+- **Day 21–30** — Deadline. Pay, settle, or silence.
+- **Day 30–60** — Negotiation. Settlements typically land at 60–85% of demand.
+- **Day 45–90** — Resolution: full payment, negotiated settlement, litigation filed, or abandoned.
 
 ## Stage 1: Intake and engagement (Day 0 to Day 2)
 
@@ -88,6 +103,15 @@ The case ends in one of four ways:
 
 **Abandonment.** You decide the recovery isn't worth the cost. About 10-15% of disputes end here — usually small-dollar cases where the recipient is unresponsive and judgment-proof.
 
+## Four recipient responses, side by side
+
+| Response | Frequency | When it happens | What you do next |
+|---|---|---|---|
+| **Pays in full** | ~15–25% | Day 10–21 | Confirm receipt, send release if requested |
+| **Counsel responds** | ~25–35% | Day 7–21 | Negotiate (settlement window opens) |
+| **Recipient contacts you** | ~20–30% | Day 5–25 | Handle directly or hire follow-on counsel |
+| **Goes silent** | ~20–30% | Past Day 21 | File suit, send final demand, or abandon |
+
 ## What the timeline looks like in practice
 
 Three real patterns we see at TTML:
@@ -103,6 +127,13 @@ Three real patterns we see at TTML:
 A demand letter, even from a lawyer, is not a court order. It cannot freeze the recipient's assets, garnish wages, or compel discovery. It cannot legally require the recipient to do anything. Its power is entirely about changing the recipient's incentives — making the cost of inaction higher than the cost of compliance.
 
 If the recipient is judgment-proof (no assets, no income to garnish), even winning a lawsuit doesn't produce recovery. The letter doesn't change that. We covered the question of when a letter is the right move in [Can I Write My Own Demand Letter, or Do I Need a Lawyer?](/blog/write-own-demand-letter-vs-lawyer-california) and the broader options in [I'm Owed Money But Don't Want to Sue — What Are My Real Options in California?](/blog/im-owed-money-dont-want-to-sue-options-california).
+
+## Keep reading
+
+- [How to Write a Demand Letter in California: A Step-by-Step Guide](/blog/how-to-write-demand-letter-california-step-by-step) — the seven sections every letter on this timeline contains.
+- [How Much Does a Demand Letter Cost in California?](/blog/how-much-does-demand-letter-cost-california-2026) — the four pricing models that produce the arc described above.
+- [What Is a Final Demand Letter Before Legal Action in California?](/blog/what-is-final-demand-letter-before-legal-action-california) — the next move when Day 21 passes without payment.
+- [Can I Write My Own Demand Letter or Do I Need a Lawyer?](/blog/write-own-demand-letter-vs-lawyer-california) — the threshold question that comes before any of this.
 
 ## Bottom line
 

@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: pricing-and-roi
 tags: ["pricing", "demand letter", "california", "unbundled legal services"]
 status: published
+og_image_url: auto:generate
 ---
 
 Yes. You can hire a California attorney to draft, sign, and mail one letter on your behalf, then walk away owing nothing else. The bar association has a name for it — "limited scope representation" or "unbundled legal services." The California Rules of Professional Conduct (Rule 1.2(b)) specifically permit it. The whole arrangement is older than most law firms' websites.
@@ -19,6 +20,8 @@ Yes. You can hire a California attorney to draft, sign, and mail one letter on y
 The traditional law firm sells you a relationship. You meet the attorney, you sign a retainer, you fund a trust account with $3,000 to $10,000, the firm bills against it in six-minute increments, and somewhere months later you find out your $1,200 problem cost $4,800 to solve. That's not predatory; it's just the business model that pays an associate's salary and a partner's rent.
 
 A single demand letter doesn't fit that model. A letter takes a few hours of attorney time, costs the firm almost nothing to produce, and resolves the dispute in a way that ends future billing. From the firm's perspective, that's the worst possible customer — high effort to onboard, low recurring revenue. So traditional firms quietly route those clients away, or quote a number high enough that the client walks. The market filled in around them.
+
+> **California Rules of Professional Conduct, Rule 1.2(b)** — A lawyer may limit the scope of representation, as long as the limitation is reasonable and the client gives informed consent in writing. This is the rule that makes a $199 single-letter engagement legally identical to a $5,000 retainer engagement — same attorney, same letterhead, narrower job.
 
 ## What "unbundled" actually means in California
 
@@ -58,6 +61,18 @@ The pattern that fits unbundled work, almost every time:
 4. You're not interested in a year-long lawsuit; you want the dispute to go away.
 
 If three of those four are true, an attorney letter is usually the cheapest move that actually changes the other party's behavior. The letter shifts the cost-benefit math for them: ignoring you was free, ignoring a lawyer might cost them a filed complaint.
+
+## Traditional retainer vs. flat-fee single letter
+
+| | Traditional retainer | Flat-fee single letter |
+|---|---|---|
+| **Up-front cost** | $3,000–$10,000 trust deposit | $199 |
+| **Billing model** | 6-minute increments, hourly | One fixed price |
+| **Scope** | Open-ended | One letter, then engagement ends |
+| **Scope creep risk** | High | None |
+| **Attorney of record for future filings?** | Yes | No |
+| **Best for disputes valued** | $75,000+ | $1,000–$25,000 |
+| **Surprise invoices on the back end?** | Common | None |
 
 ## How this compares to alternatives
 

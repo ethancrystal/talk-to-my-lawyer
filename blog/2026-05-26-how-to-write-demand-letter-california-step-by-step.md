@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: demand-letters
 tags: ["demand letter", "how to write", "california", "step-by-step", "guide"]
 status: published
+og_image_url: auto:generate
 ---
 
 A demand letter is the most leveraged piece of writing most people will ever produce. A single page, mailed for nine dollars, can recover a $15,000 invoice that's been ignored for three months. The same single page, written poorly, can make the dispute worse — locking in bad facts, training the other side to discount your threats, or in extreme cases crossing into legally actionable conduct. The difference is structure.
@@ -27,6 +28,18 @@ A demand letter is not where you figure out what you want. It's where you commun
 **What court would you actually file in?** If the amount is $12,500 or less, that's small claims court under California Code of Civil Procedure § 116.220. If more, it's civil court — limited civil ($12,501-$35,000) or unlimited civil (over $35,000). The court determines what you can demand and what relief is available. The letter should match.
 
 If those three questions don't have clear answers, the letter isn't ready to be written. Either gather more documentation, or talk to a California attorney about whether you have a claim worth pursuing.
+
+> **California Civil Code §§ 1549, 3289, 3300** — These three sections are the spine of almost every California money-demand letter. **§ 1549** defines what counts as a contract. **§ 3300** entitles the non-breaching party to damages that would "naturally" result from the breach. **§ 3289** sets default pre-judgment interest at 10% per year when the contract is silent. Cite these and the recipient knows you've done the homework.
+
+## The day-by-day timeline of a working demand letter
+
+- **Day –3 to 0** — Prep. Pull contract, invoices, prior correspondence. Confirm legal name and registered address of the recipient.
+- **Day 0** — Letter drafted using the seven-section template below. Reviewed once for tone and accuracy.
+- **Day 1** — Letter signed and sent USPS certified mail with return receipt. Email copy sent the same day to the recipient's business contact.
+- **Day 3–7** — Green card returns confirming delivery. **The deadline clock starts on the delivery date, not the mailing date.**
+- **Day 7–21** — Wait window. No follow-ups, no nagging emails. Silence preserves the deadline's weight.
+- **Day 21** — Deadline. Recipient has paid, negotiated, hired counsel, or gone silent.
+- **Day 22–45** — Negotiation or escalation. If silence, file the threatened suit on the schedule the letter named.
 
 ## The seven sections, in order
 
@@ -94,6 +107,15 @@ One paragraph. Specific. The recipient should finish reading this paragraph know
 
 The consequence has to be real. Don't threaten what you won't do. If you wouldn't actually file suit on day 22, write a different consequence.
 
+## Letter format comparison — which weight does the job?
+
+| Format | Cost | Sender authority | Statute citation | Recipient response rate | Best for |
+|---|---|---|---|---|---|
+| **Plain-text DIY letter** | $0 + $9 mail | None | Sometimes | 20–35% | Disputes under $1,000 |
+| **Template-generated letter** | $25–$50 | None | Generic | ~30% | Disputes under $2,000 |
+| **Flat-fee attorney letter** | $199 (TTML) | Bar-licensed CA attorney | Always, precise | 60–70% | $1,000–$25,000 |
+| **Traditional firm letter** | $500–$2,000 | Firm name + partner | Always | 65–75% | $50,000+ disputes |
+
 ## What to never put in a demand letter
 
 A few moves convert a demand letter from an asset into a liability:
@@ -123,6 +145,13 @@ Wait the full deadline. Do not follow up with reminders. The point of the deadli
 If they pay before the deadline, great. If they respond with a counter-offer or a partial payment, evaluate it on the merits. If they ignore the letter past the deadline, you're at a decision point: file the lawsuit you threatened, send a [final demand letter](/blog/what-is-final-demand-letter-before-legal-action-california) escalating to an attorney signature, or accept that recovery isn't worth the cost.
 
 For the broader strategic question of when to send your own letter vs. hire an attorney, see [Can I Write My Own Demand Letter, or Do I Need a Lawyer?](/blog/write-own-demand-letter-vs-lawyer-california). For what to expect after sending, see [What Happens When You Send a Demand Letter From a Lawyer?](/blog/what-happens-when-you-send-a-demand-letter-from-a-lawyer-california).
+
+## Keep reading
+
+- [Can I Write My Own Demand Letter or Do I Need a Lawyer in California?](/blog/write-own-demand-letter-vs-lawyer-california) — the cost-benefit math behind hiring the signature.
+- [What Happens When You Send a Demand Letter From a Lawyer in California?](/blog/what-happens-when-you-send-a-demand-letter-from-a-lawyer-california) — the 30-to-90-day arc after the letter lands.
+- [The Common Mistakes That Kill Settlement Letters in California](/blog/common-mistakes-that-kill-settlement-letters-california) — seven failure modes to design around.
+- [How Much Does a Demand Letter Cost in California?](/blog/how-much-does-demand-letter-cost-california-2026) — the four pricing models, full breakdown.
 
 ## Bottom line
 

@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: demand-letters
 tags: ["final demand letter", "pre-litigation", "california", "legal action"]
 status: published
+og_image_url: auto:generate
 ---
 
 A final demand letter is the last written warning sent before a lawsuit is filed. It's not the first letter, and it's not a request — it's a notice. By the time a party receives a final demand, the negotiation phase is over. The next document with that party's name on it will be filed at a courthouse.
@@ -25,6 +26,18 @@ The transition from regular to final tends to happen after one or two of these m
 - The other side ignored the initial demand.
 - The other side responded with bad faith — a denial that contradicts the contract, a counter-offer that's transparently insulting, or an offer to settle for ten percent of what's owed.
 - The statute of limitations is closing. California Code of Civil Procedure § 337 gives you four years to sue on a written contract, but waiting until month 47 is foolish — the final demand goes out months before that wall.
+
+> **California Civil Code § 3289 & CCP § 337** — Pre-judgment interest on unpaid contract claims accrues at **10% per year** by default. The statute of limitations on a written contract is **four years**. A final demand letter sent in year three doesn't just settle the case — it documents the demand date for interest calculations and freezes the timeline against the four-year wall.
+
+## The escalation timeline — first letter to filed lawsuit
+
+- **Day 0** — First demand letter mailed certified. 14–21 day deadline.
+- **Day 21** — Deadline lapses with no response or bad-faith response.
+- **Day 22–28** — Decision: escalate or walk. If escalating, draft the final demand.
+- **Day 30** — Final demand letter sent, attorney-signed. New 14-day deadline.
+- **Day 37–44** — Settlement window opens. Statistically, most cases that respond, respond here.
+- **Day 44** — Final deadline. Pay, settle, or get sued.
+- **Day 45** — Complaint drafted and filed if no resolution.
 
 ## What a working final demand includes
 

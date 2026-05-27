@@ -8,6 +8,7 @@ author: "Talk to My Lawyer Team"
 category: debt-collection
 tags: ["legal letter", "debt collection", "california", "demand letter"]
 status: published
+og_image_url: auto:generate
 ---
 
 A legal letter sent to recover money owed is, in plain language, a written notice from a lawyer telling another party that they owe you a specific amount and that the law backs you up. In California practice, the document usually goes by one of three names — demand letter, settlement letter, or final notice before suit — depending on what stage of the dispute you're in. They share a common purpose: get the money back without a courtroom.
@@ -35,6 +36,19 @@ The same physical document gets called different things depending on context.
 **Final notice or final demand.** Used as the last move before filing suit. The deadline is hard, the consequences are spelled out, and the next document the recipient receives is usually a court complaint. We covered this one in detail in [What Is a Final Demand Letter Before Legal Action?](/blog/what-is-final-demand-letter-before-legal-action-california).
 
 In practice, the three blur together. A single dispute might involve all three letters in sequence over a few months.
+
+> **California Civil Code § 3289(b)** — When a contract doesn't specify an interest rate, pre-judgment interest accrues at **10% per year** from the date the obligation became due. On a $10,000 unpaid invoice that's been outstanding a year, that's an extra $1,000 — a number every demand letter should include and most DIY letters forget.
+
+## Demand letter vs. settlement letter vs. final notice — quick map
+
+| | Demand letter | Settlement letter | Final notice |
+|---|---|---|---|
+| **Stage** | First formal ask | Mid-dispute negotiation | Last move before filing |
+| **Tone** | Firm but open | Conciliatory | Closing |
+| **Statute cite required** | Yes | Yes | Yes |
+| **Negotiation language** | "Demand is made" | "Willing to resolve for…" | "No further negotiation" |
+| **Deadline** | 14–21 days | 14–30 days | 7–14 days, hard |
+| **Settles % of cases** | ~60–70% | ~80% of those that engage | Highest urgency, ~50% pay |
 
 ## What every money-recovery letter contains
 
