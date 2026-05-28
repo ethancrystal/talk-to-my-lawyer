@@ -19,10 +19,9 @@ import {
   createBlogPost,
   updateBlogPost,
   getBlogPostBySlugAnyStatus,
-  getBlogPostBySlug,
   getAllBlogPosts,
-  getPublishedBlogPosts,
 } from "./db/blog";
+import { getCachedBlogPosts, getCachedBlogPost } from "./blogCache";
 import { invalidateBlogPostCache } from "./blogCacheInvalidation";
 import { logger } from "./logger";
 import { BLOG_CATEGORIES } from "../drizzle/schema/constants";
@@ -160,24 +159,39 @@ function extractExcerpt(content: string): string {
 // Auth middleware
 // ---------------------------------------------------------------------------
 
+/** Extract the caller-supplied key from either supported header. */
+function extractProvidedKey(req: Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  const headerKey = req.headers["x-blog-publish-key"];
+  return (
+    (typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : undefined) ??
+    (typeof headerKey === "string" ? headerKey : undefined)
+  );
+}
+
 /**
- * Returns true if the request carries a valid publish API key (either a
- * `Bearer` Authorization header or an `X-Blog-Publish-Key` header). When no
- * key is configured (local dev), every request is treated as authorized.
+ * Write authorization (POST). When no key is configured (local dev), every
+ * request is allowed through — this preserves the documented open-in-dev
+ * behavior of the publish endpoint.
  */
 function isAuthorized(req: Request): boolean {
   const apiKey = ENV.blogPublishApiKey;
   if (!apiKey) return true; // No key configured (local dev) — allow through
+  return extractProvidedKey(req) === apiKey;
+}
 
-  const authHeader = req.headers.authorization;
-  const headerKey = req.headers["x-blog-publish-key"];
-  const provided =
-    (typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : undefined) ??
-    (typeof headerKey === "string" ? headerKey : undefined);
-
-  return provided === apiKey;
+/**
+ * Management authorization (GET drafts / full list). Unlike isAuthorized, a
+ * MISSING key never grants access: management reads require an explicit key
+ * match. So a deploy without BLOG_PUBLISH_API_KEY can never leak drafts — it
+ * simply degrades GET to the public, published-only view.
+ */
+function hasValidManagementKey(req: Request): boolean {
+  const apiKey = ENV.blogPublishApiKey;
+  if (!apiKey) return false;
+  return extractProvidedKey(req) === apiKey;
 }
 
 /** Write guard — rejects unauthenticated callers with 401. Used on POST. */
@@ -333,9 +347,11 @@ async function handleBlogPublish(req: Request, res: Response): Promise<void> {
 // ---------------------------------------------------------------------------
 // Read handler (GET) — companion to the POST write handler.
 //
-// Soft auth: unauthenticated callers get the PUBLIC view (published posts
-// only), matching what the live /blog site already exposes. Callers presenting
-// a valid publish key get the MANAGEMENT view, which also includes drafts.
+// Soft auth: callers WITHOUT a valid publish key get the PUBLIC view (published
+// posts only), served through the same Cloudflare KV/Worker cache as the live
+// /blog site so browsers/bots can't bypass it to hammer Postgres. Callers with
+// a valid key get the MANAGEMENT view — direct DB reads including drafts. A
+// missing key never grants management access (degrades to the public view).
 //
 //   GET /api/blog/publish                          → list of posts
 //   GET /api/blog/publish?slug=foo-bar             → single post
@@ -344,15 +360,15 @@ async function handleBlogPublish(req: Request, res: Response): Promise<void> {
 
 async function handleBlogRead(req: Request, res: Response): Promise<void> {
   try {
-    const authed = isAuthorized(req);
+    const management = hasValidManagementKey(req);
     const slug = typeof req.query.slug === "string" ? req.query.slug.trim() : "";
 
-    // Single post by slug. Authed callers can read drafts; the public can only
-    // read published posts.
+    // Single post by slug. Management callers read any status (incl. drafts)
+    // straight from the DB; the public gets the cached, published-only view.
     if (slug) {
-      const post = authed
+      const post = management
         ? await getBlogPostBySlugAnyStatus(slug)
-        : await getBlogPostBySlug(slug);
+        : await getCachedBlogPost(slug);
       if (!post) {
         res.status(404).json({ error: "Not found", slug });
         return;
@@ -362,7 +378,7 @@ async function handleBlogRead(req: Request, res: Response): Promise<void> {
     }
 
     // Management list — lightweight summaries across ALL statuses (drafts too).
-    if (authed) {
+    if (management) {
       const all = await getAllBlogPosts();
       res.json({
         posts: all.map((p) => ({
@@ -379,7 +395,7 @@ async function handleBlogRead(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Public list — published only, paginated (mirrors /api/blog-internal/list).
+    // Public list — published only, via the KV/Worker cache (mirrors blog.list).
     const category =
       typeof req.query.category === "string" && req.query.category
         ? req.query.category
@@ -389,7 +405,7 @@ async function handleBlogRead(req: Request, res: Response): Promise<void> {
       Math.max(1, parseInt(String(req.query.limit ?? "12"), 10) || 12)
     );
     const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-    const data = await getPublishedBlogPosts({ category, limit, offset });
+    const data = await getCachedBlogPosts({ category, limit, offset });
     res.json(data);
   } catch (err) {
     logger.error({ err }, "[blog-publish] GET error:");
