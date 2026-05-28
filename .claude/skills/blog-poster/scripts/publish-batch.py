@@ -204,4 +204,26 @@ def main() -> int:
     if args.json:
         try:
             payload = json.loads(args.json)
-        except json
+        except json.JSONDecodeError as e:
+            sys.exit(f"ERROR: invalid JSON: {e}")
+        status, body = publish_json(payload, key, args.timeout)
+        print(f"  {status}  {body}")
+        return 0 if 200 <= status < 300 else 1
+
+    files = resolve_files(args)
+    print(f"Publishing {len(files)} file(s)…\n")
+
+    ok = 0
+    for path in files:
+        status, body = publish_markdown(path, key, args.timeout)
+        tag = "[OK]" if 200 <= status < 300 else "[FAIL]"
+        print(f"  {tag} {status}  {path.name}  {body[:120]}")
+        if 200 <= status < 300:
+            ok += 1
+
+    print(f"\nDone. {ok}/{len(files)} succeeded.")
+    return 0 if ok == len(files) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
