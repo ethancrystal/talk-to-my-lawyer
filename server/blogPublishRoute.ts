@@ -19,6 +19,9 @@ import {
   createBlogPost,
   updateBlogPost,
   getBlogPostBySlugAnyStatus,
+  getBlogPostBySlug,
+  getAllBlogPosts,
+  getPublishedBlogPosts,
 } from "./db/blog";
 import { invalidateBlogPostCache } from "./blogCacheInvalidation";
 import { logger } from "./logger";
@@ -157,13 +160,14 @@ function extractExcerpt(content: string): string {
 // Auth middleware
 // ---------------------------------------------------------------------------
 
-function blogPublishAuth(req: Request, res: Response, next: NextFunction): void {
+/**
+ * Returns true if the request carries a valid publish API key (either a
+ * `Bearer` Authorization header or an `X-Blog-Publish-Key` header). When no
+ * key is configured (local dev), every request is treated as authorized.
+ */
+function isAuthorized(req: Request): boolean {
   const apiKey = ENV.blogPublishApiKey;
-  if (!apiKey) {
-    // No key configured (local dev) — allow through
-    next();
-    return;
-  }
+  if (!apiKey) return true; // No key configured (local dev) — allow through
 
   const authHeader = req.headers.authorization;
   const headerKey = req.headers["x-blog-publish-key"];
@@ -173,7 +177,12 @@ function blogPublishAuth(req: Request, res: Response, next: NextFunction): void 
       : undefined) ??
     (typeof headerKey === "string" ? headerKey : undefined);
 
-  if (provided !== apiKey) {
+  return provided === apiKey;
+}
+
+/** Write guard — rejects unauthenticated callers with 401. Used on POST. */
+function blogPublishAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!isAuthorized(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -322,11 +331,84 @@ async function handleBlogPublish(req: Request, res: Response): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Read handler (GET) — companion to the POST write handler.
+//
+// Soft auth: unauthenticated callers get the PUBLIC view (published posts
+// only), matching what the live /blog site already exposes. Callers presenting
+// a valid publish key get the MANAGEMENT view, which also includes drafts.
+//
+//   GET /api/blog/publish                          → list of posts
+//   GET /api/blog/publish?slug=foo-bar             → single post
+//   GET /api/blog/publish?category=&limit=&offset= → filtered public list
+// ---------------------------------------------------------------------------
+
+async function handleBlogRead(req: Request, res: Response): Promise<void> {
+  try {
+    const authed = isAuthorized(req);
+    const slug = typeof req.query.slug === "string" ? req.query.slug.trim() : "";
+
+    // Single post by slug. Authed callers can read drafts; the public can only
+    // read published posts.
+    if (slug) {
+      const post = authed
+        ? await getBlogPostBySlugAnyStatus(slug)
+        : await getBlogPostBySlug(slug);
+      if (!post) {
+        res.status(404).json({ error: "Not found", slug });
+        return;
+      }
+      res.json(post);
+      return;
+    }
+
+    // Management list — lightweight summaries across ALL statuses (drafts too).
+    if (authed) {
+      const all = await getAllBlogPosts();
+      res.json({
+        posts: all.map((p) => ({
+          id: p.id,
+          slug: p.slug,
+          title: p.title,
+          status: p.status,
+          category: p.category,
+          updatedAt: p.updatedAt,
+          publishedAt: p.publishedAt,
+        })),
+        total: all.length,
+      });
+      return;
+    }
+
+    // Public list — published only, paginated (mirrors /api/blog-internal/list).
+    const category =
+      typeof req.query.category === "string" && req.query.category
+        ? req.query.category
+        : undefined;
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(String(req.query.limit ?? "12"), 10) || 12)
+    );
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const data = await getPublishedBlogPosts({ category, limit, offset });
+    res.json(data);
+  } catch (err) {
+    logger.error({ err }, "[blog-publish] GET error:");
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
 export function registerBlogPublishRoute(app: Express): void {
-  // Support raw text bodies for markdown submissions
+  // GET — read posts. Public callers see published posts only; callers with a
+  // valid publish key also see drafts (management view). Auth handled inside
+  // the handler, so no write guard here.
+  app.get("/api/blog/publish", handleBlogRead);
+
+  // POST — create or update a post by slug. Requires the publish API key.
+  // Supports raw text bodies for markdown submissions.
   app.post(
     "/api/blog/publish",
     blogPublishAuth,
