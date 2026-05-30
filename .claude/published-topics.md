@@ -104,3 +104,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - California Freelance Worker Protection Act (SB 988): The Complete Guide for Independent Contractors (LONG)
 - Contractor Took Your Money and Didn't Finish the Job? California Legal Options Explained (LONG)
 - $199 vs $580 vs $1,375: The Real Cost of Getting a Demand Letter in California (LONG)
+
+
+## 2026-05-29 (Friday — Consumer Complaints / Refunds)
+- How Do I Get a Refund for a Service I Paid For But Never Received in California? (SHORT)
+- Can You Still Get a Refund After the Store's Return Window Closes in California? (SHORT)
+- What Is the California Consumer Legal Remedies Act (CLRA) and How Does It Protect You? (SHORT)
+- An Online Store Won't Refund My Defective Product — What Are My Rights in California? (SHORT)
+- An Auto Repair Shop Overcharged Me or Did Unauthorized Work — How Do I Fight It in California? (SHORT)
+- The Complete Guide to Getting Your Money Back From a Business in California (2026) (LONG)
+- California Consumer Refund Rights: Laws, Deadlines, and Remedies Explained (2026) (LONG)
+- Subscription Traps and Auto-Renewal Refunds: Your Rights Under California Law (2026) (LONG)
+- Defective Product, Bad Service, or Scam? A California Consumer's Legal Playbook for Refunds (LONG)
+- Small Claims vs. Consumer Complaint vs. Demand Letter: The Smartest Way to Recover Money From a Business in California (LONG)
