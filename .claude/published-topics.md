@@ -129,3 +129,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - How to Resolve a Shared Driveway Dispute in California (long)
 - What Is a Private Nuisance and How Do You Make a Neighbor Stop? (long)
 - A Neighbor's Drainage Is Flooding My Yard — My Rights in California (long)
+
+
+## 2026-05-30 (run 2 — Saturday Letter Deep-Dives)
+- I Was Wrongfully Terminated in California — What Can I Do? (SHORT)
+- What Is a Demand Letter for Unpaid Wages in California and Does It Actually Work? (SHORT)
+- How Much Does a Cease and Desist Letter Cost in California? (SHORT)
+- My Insurance Claim Was Denied in California — What Are My Options? (SHORT)
+- What Is a Habitability Demand Letter and Can It Force My Landlord to Make Repairs in California? (SHORT)
+- The California Employee's Complete Guide to Recovering Unpaid Wages and Overtime (2026) (LONG)
+- How to Write a Demand Letter to an Insurance Company in California (2026): The Complete Guide (LONG)
+- How to Evict a Tenant in California: The Complete Step-by-Step Legal Guide (2026) (LONG)
+- Car Accident Demand Letter in California: What to Include and How Much to Ask For (2026 Guide) (LONG)
+- Which Type of Legal Letter Do You Actually Need? A California Decision Guide (2026) (LONG)
