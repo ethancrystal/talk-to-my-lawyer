@@ -67,10 +67,25 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
   return inserted;
 }
 
+/** source_action values representing attorney review actions. SECURITY: only
+ *  these are safe to inject into generation prompts — subscriber-authored
+ *  feedback (source_action subscriber_update / subscriber_retry) must never be
+ *  presented to the model as trusted guidance, which would be a stored
+ *  prompt-injection vector across every letter sharing the same scope. */
+export const ATTORNEY_LESSON_SOURCE_ACTIONS = [
+  "attorney_approval",
+  "attorney_rejection",
+  "attorney_changes",
+  "attorney_edit",
+] as const;
+
 export async function getActiveLessons(filters: {
   letterType?: string;
   jurisdiction?: string;
   pipelineStage?: string;
+  /** Restrict to lessons authored by these source actions. Callers injecting
+   *  lessons into LLM prompts MUST pass ATTORNEY_LESSON_SOURCE_ACTIONS. */
+  sourceActions?: readonly string[];
   limit?: number;
 }) {
   const db = await getReadDb();
@@ -99,6 +114,14 @@ export async function getActiveLessons(filters: {
       ${filters.letterType ? sql`AND (letter_type = ${filters.letterType} OR letter_type IS NULL)` : sql``}
       ${filters.jurisdiction ? sql`AND (jurisdiction = ${filters.jurisdiction} OR jurisdiction IS NULL)` : sql``}
       ${filters.pipelineStage ? sql`AND (pipeline_stage = ${filters.pipelineStage} OR pipeline_stage IS NULL)` : sql``}
+      ${
+        filters.sourceActions && filters.sourceActions.length > 0
+          ? sql`AND source_action::text IN (${sql.join(
+              filters.sourceActions.map((a) => sql`${a}`),
+              sql`, `,
+            )})`
+          : sql``
+      }
     ORDER BY effective_score DESC
     LIMIT ${filters.limit ?? 10}
   `);

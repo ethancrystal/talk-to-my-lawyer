@@ -421,6 +421,12 @@ export async function processRunPipeline(
           userId,
           intake: intake as Record<string, any>,
           isFreePreview: isPreviewGatedSubmission,
+          // Fresh checkpoint thread per invocation: we just superseded prior
+          // runs, so this is a clean start. A stable `letter_${id}` thread would
+          // make a durable PostgresSaver RESUME a stale prior checkpoint and
+          // could finalize an old draft. finalizeNode is idempotent, so a
+          // re-run after a crash safely no-ops if the letter already finalized.
+          threadId: `letter_${letterId}_${Date.now()}`,
         });
         logger.info(`[Worker] Paid subscriber LangGraph pipeline completed for letter #${letterId}`);
         return;

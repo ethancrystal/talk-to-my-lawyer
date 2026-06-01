@@ -1,4 +1,4 @@
-import { getActiveLessons, incrementLessonInjectionStats } from "../db";
+import { ATTORNEY_LESSON_SOURCE_ACTIONS, getActiveLessons, incrementLessonInjectionStats } from "../db";
 import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
@@ -580,6 +580,9 @@ export async function buildLessonsPromptBlock(
       letterType,
       jurisdiction: jurisdiction ?? undefined,
       pipelineStage: stage,
+      // SECURITY: attorney-authored lessons only — never inject subscriber
+      // feedback into prompts as trusted guidance (see lessons.ts).
+      sourceActions: ATTORNEY_LESSON_SOURCE_ACTIONS,
       limit: 10,
     });
 

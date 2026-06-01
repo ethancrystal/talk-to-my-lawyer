@@ -288,6 +288,19 @@ export interface RunLangGraphPipelineOptions {
   userId?: number;
   intake: Record<string, any>;
   isFreePreview?: boolean;
+  /**
+   * LangGraph checkpoint thread id. Defaults to `letter_${letterId}`.
+   *
+   * IMPORTANT: the checkpointer is a durable PostgresSaver. With a STABLE
+   * thread id, a re-run of the same letter (admin re-submit, rejected→submitted
+   * recovery edge, or a brand-new pg-boss delivery after supersede) would RESUME
+   * the prior run's persisted checkpoint instead of starting fresh — and could
+   * finalize a stale/degraded draft. Callers that are starting a fresh run
+   * (i.e. after markPriorPipelineRunsSuperseded) should pass a per-invocation
+   * unique id so the graph always starts clean. finalizeNode is idempotent, so
+   * a fresh re-run after a crash is safe.
+   */
+  threadId?: string;
 }
 
 /**
@@ -300,9 +313,13 @@ export interface RunLangGraphPipelineOptions {
 export async function runLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): Promise<PipelineStateType> {
-  const { letterId, userId = 0, intake, isFreePreview = false } = opts;
+  const { letterId, userId = 0, intake, isFreePreview = false, threadId } = opts;
+  const checkpointThreadId = threadId ?? `letter_${letterId}`;
 
-  log.info({ letterId, isFreePreview }, "[Graph] Starting LangGraph pipeline");
+  log.info(
+    { letterId, isFreePreview, checkpointThreadId },
+    "[Graph] Starting LangGraph pipeline",
+  );
 
   const graph = await getGraphWithCheckpointer();
 
@@ -320,7 +337,7 @@ export async function runLangGraphPipeline(
   };
 
   const finalState = await graph.invoke(initialState, {
-    configurable: { thread_id: `letter_${letterId}` },
+    configurable: { thread_id: checkpointThreadId },
   });
 
   if (finalState.currentStage === "failed") {
