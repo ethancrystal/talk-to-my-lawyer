@@ -422,7 +422,7 @@ vi.mock("./db", () => {
     // attorney-authored lessons (subscriber feedback is excluded from prompts).
     // vitest is strict about mock exports, so it must be present on the mock or
     // init's lesson load throws "No export defined" and falls back to [].
-    ATTORNEY_LESSON_SOURCE_ACTIONS: [
+    TRUSTED_LESSON_SOURCE_ACTIONS: [
       "attorney_approval",
       "attorney_rejection",
       "attorney_changes",

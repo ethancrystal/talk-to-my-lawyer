@@ -67,16 +67,19 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
   return inserted;
 }
 
-/** source_action values representing attorney review actions. SECURITY: only
- *  these are safe to inject into generation prompts — subscriber-authored
- *  feedback (source_action subscriber_update / subscriber_retry) must never be
- *  presented to the model as trusted guidance, which would be a stored
- *  prompt-injection vector across every letter sharing the same scope. */
-export const ATTORNEY_LESSON_SOURCE_ACTIONS = [
+/** source_action values that are SAFE to inject into generation prompts:
+ *  attorney review actions PLUS admin-curated "manual" lessons authored via
+ *  /admin/learning. SECURITY: subscriber-authored feedback (source_action
+ *  subscriber_update / subscriber_retry) is deliberately EXCLUDED — injecting it
+ *  as trusted guidance is a stored prompt-injection vector across every letter
+ *  sharing the same scope. */
+export const TRUSTED_LESSON_SOURCE_ACTIONS = [
   "attorney_approval",
   "attorney_rejection",
   "attorney_changes",
   "attorney_edit",
+  // Admin-curated via /admin/learning — admin-authored, NOT subscriber-authored.
+  "manual",
 ] as const;
 
 export async function getActiveLessons(filters: {
@@ -84,7 +87,7 @@ export async function getActiveLessons(filters: {
   jurisdiction?: string;
   pipelineStage?: string;
   /** Restrict to lessons authored by these source actions. Callers injecting
-   *  lessons into LLM prompts MUST pass ATTORNEY_LESSON_SOURCE_ACTIONS. */
+   *  lessons into LLM prompts MUST pass TRUSTED_LESSON_SOURCE_ACTIONS. */
   sourceActions?: readonly string[];
   limit?: number;
 }) {

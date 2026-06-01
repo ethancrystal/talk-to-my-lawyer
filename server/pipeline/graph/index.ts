@@ -367,7 +367,7 @@ export async function runLangGraphPipeline(
 export async function* streamLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): AsyncGenerator<{ node: string; state: Partial<PipelineStateType> }> {
-  const { letterId, userId = 0, intake } = opts;
+  const { letterId, userId = 0, intake, threadId } = opts;
   const graph = await getGraphWithCheckpointer();
 
   const initialState: Partial<PipelineStateType> = {
@@ -384,7 +384,9 @@ export async function* streamLangGraphPipeline(
 
   for await (const event of await graph.streamEvents(initialState, {
     version: "v2",
-    configurable: { thread_id: `letter_${letterId}` },
+    // Per-invocation thread id by default (avoids stale checkpoint resume),
+    // overridable by the caller for an intentional resume.
+    configurable: { thread_id: threadId ?? `letter_${letterId}_${Date.now()}` },
   })) {
     if (event.event === "on_chain_end" && event.name !== "LangGraph") {
       yield {

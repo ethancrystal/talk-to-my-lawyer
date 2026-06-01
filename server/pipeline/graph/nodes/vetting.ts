@@ -3,7 +3,11 @@ import { createLogger } from "../../../logger";
 import type { PipelineStateType } from "../state";
 import { breadcrumb, recordTokenUsage, type NormalizedIntake } from "../memory";
 import { callLlmWithFailover } from "./llm-failover";
-import { validateContentConsistency } from "../../validators";
+import {
+  validateContentConsistency,
+  US_STATE_NAMES,
+  STATE_ABBREV_TO_NAME,
+} from "../../validators";
 import { extractCitationsFromText } from "../../citations";
 
 const log = createLogger({ module: "LangGraph:VettingNode" });
@@ -26,16 +30,70 @@ interface VettingReport {
 
 export interface DeterministicVettingResult {
   /** True when a hard, deterministic legal-safety problem was found —
-   *  currently: the letter cites a DIFFERENT US state's statutory authority
-   *  than the intake jurisdiction. This forces a degrade/redraft regardless of
-   *  the LLM's self-score. */
+   *  currently: an EXTRACTED CITATION references a different US state's
+   *  statutory authority than the intake jurisdiction. This forces a
+   *  degrade/redraft regardless of the LLM's self-score. */
   degraded: boolean;
-  /** The jurisdiction-mismatch detail (validateContentConsistency wording), or null. */
+  /** The jurisdiction-mismatch detail, or null when no foreign citation found. */
   jurisdictionMismatch: string | null;
   /** Advisory, human-readable warnings to surface to the attorney + redraft loop. */
   warnings: string[];
   /** Every statute/case citation the regex engine found in the letter. */
   citations: string[];
+}
+
+// Reporter-style state abbreviations as they appear INSIDE citations (mirrors
+// the patterns in citations.ts). Used to map a citation like "Tex. Civ. Code"
+// back to its state for jurisdiction comparison.
+const REPORTER_ABBREV_TO_STATE: Record<string, string> = {
+  "cal.": "California",
+  "tex.": "Texas",
+  "n.y.": "New York",
+  "fla.": "Florida",
+  "ill.": "Illinois",
+  ohio: "Ohio",
+  "pa.": "Pennsylvania",
+  "ga.": "Georgia",
+  "mass.": "Massachusetts",
+  "mich.": "Michigan",
+  "wash.": "Washington",
+  "va.": "Virginia",
+};
+
+/** Resolve a jurisdiction value ("CA" or "California") to its full state name. */
+function resolveStateName(raw: string | null | undefined): string | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  const byAbbrev = STATE_ABBREV_TO_NAME[t.toUpperCase()];
+  if (byAbbrev) return byAbbrev;
+  const full = US_STATE_NAMES.find((s) => s.toLowerCase() === t.toLowerCase());
+  return full ?? null;
+}
+
+/**
+ * If a single extracted CITATION references a US state other than the
+ * jurisdiction, return that state's name; otherwise null.
+ *
+ * Precision is the whole point: we look for the foreign state ONLY inside the
+ * citation string (e.g. "Texas Property Code § 92.109" or "Tex. Civ. Code"),
+ * NOT anywhere in the letter. A letter that merely mentions an out-of-state
+ * party or address ("recipient headquartered in Texas, governed by California
+ * law") produces no foreign-state CITATION, so it is not flagged — fixing the
+ * over-broad jurisdiction-mismatch false positive.
+ */
+function citationForeignState(citation: string, jurName: string | null): string | null {
+  const lower = citation.toLowerCase();
+  for (const name of US_STATE_NAMES) {
+    if (new RegExp(`\\b${name}\\b`, "i").test(citation)) {
+      if (!jurName || name.toLowerCase() !== jurName.toLowerCase()) return name;
+    }
+  }
+  for (const [abbr, name] of Object.entries(REPORTER_ABBREV_TO_STATE)) {
+    if (lower.includes(abbr)) {
+      if (!jurName || name.toLowerCase() !== jurName.toLowerCase()) return name;
+    }
+  }
+  return null;
 }
 
 /**
@@ -44,14 +102,19 @@ export interface DeterministicVettingResult {
  * systematically over-scores, so it cannot be the ONLY gate. These checks
  * cannot be talked out of:
  *
- *   1. Jurisdiction mismatch — validateContentConsistency flags a letter that
- *      cites a different US state's statutory authority than the intake. That
- *      is a clear legal error and forces a redraft / degrade.
+ *   1. Jurisdiction mismatch — when an EXTRACTED citation cites a different US
+ *      state's statutory authority than the intake. That is a clear legal error
+ *      and forces a redraft / degrade. We intentionally key off the citation
+ *      string (not the whole letter) so a legitimate out-of-state party/address
+ *      mention does NOT trigger a false degrade.
  *   2. Citation surfacing — LangGraph research is ungrounded
  *      (researchUnverified), so every specific statute/case the letter cites is
  *      unverified by construction. We surface each as an explicit "verify this"
  *      warning so the reviewing attorney gets a checklist instead of re-reading
  *      the whole letter hunting for authorities.
+ *
+ * Party-name / jurisdiction-presence findings from validateContentConsistency
+ * are surfaced as ADVISORY warnings only — they never drive `degraded`.
  *
  * Exported so it can be unit-tested directly without mocking an LLM.
  */
@@ -60,34 +123,40 @@ export function runDeterministicVettingChecks(
   ctx: NormalizedIntake,
 ): DeterministicVettingResult {
   const warnings: string[] = [];
-  let jurisdictionMismatch: string | null = null;
 
-  // validateContentConsistency only reads sender.name, recipient.name and
-  // jurisdiction.state. Build the minimal shim it needs and cast via the
-  // function's own parameter type so we don't depend on the (un-exported)
-  // NormalizedPromptInput shape.
+  // Advisory consistency checks (party swaps, missing names, jurisdiction not
+  // present). validateContentConsistency only reads sender.name, recipient.name
+  // and jurisdiction.state — build the minimal shim and cast via the function's
+  // own parameter type so we don't depend on the (un-exported) NormalizedPromptInput.
   const consistencyInput = {
     sender: { name: ctx.senderName },
     recipient: { name: ctx.recipientName },
     jurisdiction: { state: ctx.jurisdictionState ?? ctx.jurisdiction },
   } as unknown as Parameters<typeof validateContentConsistency>[1];
-
   try {
     const consistency = validateContentConsistency(letter, consistencyInput);
     for (const w of consistency.warnings) warnings.push(`CONSISTENCY: ${w}`);
-    if (consistency.jurisdictionMismatch) {
-      jurisdictionMismatch =
-        consistency.warnings.find((w) => w.includes("JURISDICTION MISMATCH")) ??
-        `Letter references legal authority outside ${consistency.expectedJurisdiction}`;
-    }
   } catch {
     // A validator regex path must never crash vetting — fail open to the LLM grade.
   }
 
+  // Hard gate: a foreign-state reference inside an actual citation.
   const citations = extractCitationsFromText(letter);
+  const jurName = resolveStateName(ctx.jurisdictionState ?? ctx.jurisdiction);
+  const foreign: string[] = [];
+  for (const c of citations) {
+    const fs = citationForeignState(c, jurName);
+    if (fs) foreign.push(`"${c}" → ${fs}`);
+  }
+  const jurisdictionMismatch =
+    foreign.length > 0
+      ? `JURISDICTION MISMATCH: letter cites non-${jurName ?? ctx.jurisdiction} authority — ${foreign.join("; ")}`
+      : null;
+
   for (const c of citations.slice(0, 20)) {
     warnings.push(`VERIFY CITATION (research ungrounded): ${c}`);
   }
+  if (jurisdictionMismatch) warnings.push(jurisdictionMismatch);
 
   return {
     degraded: jurisdictionMismatch !== null,

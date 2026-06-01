@@ -25,7 +25,7 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import {
-  ATTORNEY_LESSON_SOURCE_ACTIONS,
+  TRUSTED_LESSON_SOURCE_ACTIONS,
   createWorkflowJob,
   getActiveLessons,
 } from "../../../db";
@@ -82,7 +82,7 @@ export async function initNode(
       // also stored in pipeline_lessons (subscriber_update / subscriber_retry)
       // and must never be presented to the model as trusted guidance — that is
       // a stored prompt-injection vector across letters in the same scope.
-      sourceActions: ATTORNEY_LESSON_SOURCE_ACTIONS,
+      sourceActions: TRUSTED_LESSON_SOURCE_ACTIONS,
       limit: 10,
     });
     lessons = (rows ?? []).map((r: any) => ({

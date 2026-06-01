@@ -76,7 +76,7 @@ vi.mock("./db", () => ({
   getActiveLessons: vi.fn().mockResolvedValue([]),
   // init.ts imports this for the attorney-only lesson filter; vitest requires
   // every accessed named export to exist on the mock.
-  ATTORNEY_LESSON_SOURCE_ACTIONS: [
+  TRUSTED_LESSON_SOURCE_ACTIONS: [
     "attorney_approval",
     "attorney_rejection",
     "attorney_changes",

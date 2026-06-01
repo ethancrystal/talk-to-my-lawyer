@@ -40,6 +40,16 @@ describe("runDeterministicVettingChecks — deterministic legal-safety layer", (
     expect(result.jurisdictionMismatch).toBeNull();
   });
 
+  it("does NOT degrade when an out-of-state PARTY/location is mentioned but no foreign law is cited", () => {
+    // Regression guard: the mismatch gate keys off foreign-state references
+    // INSIDE a citation, not a bare state name near governing-law language. A
+    // California letter that notes the recipient is in Texas must not degrade.
+    const letter = `Dear Bob Landlord,\n\nAlthough you are headquartered in Texas, this matter is governed exclusively by California law. Pursuant to California Civil Code § 1950.5, Alice Subscriber demands return of the deposit.\n\nSincerely,\nAlice Subscriber`;
+    const result = runDeterministicVettingChecks(letter, caCtx);
+    expect(result.degraded).toBe(false);
+    expect(result.jurisdictionMismatch).toBeNull();
+  });
+
   it("surfaces every citation as an explicit attorney-verification warning (research is ungrounded)", () => {
     const letter = `Dear Bob Landlord,\n\nUnder California Civil Code § 1950.5, Alice Subscriber demands payment within 14 days.\n\nSincerely,\nAlice Subscriber`;
     const result = runDeterministicVettingChecks(letter, caCtx);

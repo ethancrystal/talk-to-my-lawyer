@@ -320,7 +320,7 @@ export function validateDraftGrounding(
 // PARTY & JURISDICTION CONSISTENCY CHECKER
 // ═══════════════════════════════════════════════════════
 
-const US_STATE_NAMES = [
+export const US_STATE_NAMES = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
   "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
   "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
@@ -333,7 +333,7 @@ const US_STATE_NAMES = [
   "West Virginia", "Wisconsin", "Wyoming",
 ];
 
-const STATE_ABBREV_TO_NAME: Record<string, string> = {
+export const STATE_ABBREV_TO_NAME: Record<string, string> = {
   AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
   CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
   HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",

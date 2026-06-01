@@ -151,8 +151,11 @@ export function recordTokenUsage(
 export function sanitizeLessonText(text: string): string {
   return (text ?? "")
     .replace(/\s+/g, " ")
+    // Only strip true instruction-override phrases (require an instruction-object
+    // word) so legitimate legal prose like "the court may not disregard prior
+    // precedent" is preserved.
     .replace(
-      /\b(?:ignore|disregard|forget|override)\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\b[^.\n]*\.?/gi,
+      /\b(?:ignore|disregard|forget|override)\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above|earlier|preceding)\s+(?:instructions?|prompts?|messages?|system\s+prompt|rules?|context|directions?)\b[^.\n]*\.?/gi,
       "",
     )
     .replace(/\b(?:system|assistant|developer|user)\s*:/gi, "")
