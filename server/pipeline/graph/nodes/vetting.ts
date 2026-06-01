@@ -30,11 +30,11 @@ interface VettingReport {
 
 export interface DeterministicVettingResult {
   /** True when a hard, deterministic legal-safety problem was found —
-   *  currently: an EXTRACTED CITATION references a different US state's
-   *  statutory authority than the intake jurisdiction. This forces a
-   *  degrade/redraft regardless of the LLM's self-score. */
+   *  currently: the letter cites a different US state's STATUTORY authority
+   *  than the intake jurisdiction (a statute marker with a foreign-state lead-in).
+   *  This forces a degrade/redraft regardless of the LLM's self-score. */
   degraded: boolean;
-  /** The jurisdiction-mismatch detail, or null when no foreign citation found. */
+  /** The jurisdiction-mismatch detail, or null when no foreign statute found. */
   jurisdictionMismatch: string | null;
   /** Advisory, human-readable warnings to surface to the attorney + redraft loop. */
   warnings: string[];
@@ -42,23 +42,38 @@ export interface DeterministicVettingResult {
   citations: string[];
 }
 
-// Reporter-style state abbreviations as they appear INSIDE citations (mirrors
-// the patterns in citations.ts). Used to map a citation like "Tex. Civ. Code"
-// back to its state for jurisdiction comparison.
-const REPORTER_ABBREV_TO_STATE: Record<string, string> = {
-  "cal.": "California",
-  "tex.": "Texas",
-  "n.y.": "New York",
-  "fla.": "Florida",
-  "ill.": "Illinois",
-  ohio: "Ohio",
-  "pa.": "Pennsylvania",
-  "ga.": "Georgia",
-  "mass.": "Massachusetts",
-  "mich.": "Michigan",
-  "wash.": "Washington",
-  "va.": "Virginia",
+// State legal abbreviations as they appear in statutory citations (Bluebook-ish),
+// mapping abbrev → full state name. Covers all 50 states so the deterministic
+// gate is not silently blind to e.g. "Ariz. Rev. Stat." or "Nev. Rev. Stat.".
+// Short/ambiguous tokens (Or., Me., La.) are safe because they are only matched
+// inside a STATUTORY context (see detectForeignStateStatutes), never bare prose.
+const STATE_LEGAL_ABBREV: Record<string, string> = {
+  "ala.": "Alabama", "alaska": "Alaska", "ariz.": "Arizona", "ark.": "Arkansas",
+  "cal.": "California", "calif.": "California", "colo.": "Colorado", "conn.": "Connecticut",
+  "del.": "Delaware", "fla.": "Florida", "ga.": "Georgia", "haw.": "Hawaii",
+  "idaho": "Idaho", "ill.": "Illinois", "ind.": "Indiana", "iowa": "Iowa",
+  "kan.": "Kansas", "ky.": "Kentucky", "la.": "Louisiana", "me.": "Maine",
+  "md.": "Maryland", "mass.": "Massachusetts", "mich.": "Michigan", "minn.": "Minnesota",
+  "miss.": "Mississippi", "mo.": "Missouri", "mont.": "Montana", "neb.": "Nebraska",
+  "nev.": "Nevada", "n.h.": "New Hampshire", "n.j.": "New Jersey", "n.m.": "New Mexico",
+  "n.y.": "New York", "n.c.": "North Carolina", "n.d.": "North Dakota", "ohio": "Ohio",
+  "okla.": "Oklahoma", "or.": "Oregon", "pa.": "Pennsylvania", "r.i.": "Rhode Island",
+  "s.c.": "South Carolina", "s.d.": "South Dakota", "tenn.": "Tennessee", "tex.": "Texas",
+  "utah": "Utah", "vt.": "Vermont", "va.": "Virginia", "wash.": "Washington",
+  "w. va.": "West Virginia", "wis.": "Wisconsin", "wyo.": "Wyoming",
 };
+
+// A "statutory marker" signals an actual statute/code citation (NOT a case
+// name). Requiring one before attributing a state keeps the gate precise: it
+// fires on "Ariz. Rev. Stat. § 33-1321" but NOT on a federal case whose party
+// is a state ("Texas v. Johnson", "New York Times Co. v. Sullivan") or a bare
+// out-of-state party/address mention.
+const STATUTE_MARKER_RE =
+  /(§\s*\d|\bRev\.\s*Stat\b|\bRevised Statutes\b|\bComp\.\s*Laws\b|\bCompiled Laws\b|\bGen\.\s*(?:Stat|Laws)\b|\bGeneral (?:Statutes|Laws)\b|\b[A-Z][a-z]+ Code\b|\bCode Ann\b|\bStat(?:utes?|\.)\s*Ann\b)/g;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** Resolve a jurisdiction value ("CA" or "California") to its full state name. */
 function resolveStateName(raw: string | null | undefined): string | null {
@@ -70,30 +85,42 @@ function resolveStateName(raw: string | null | undefined): string | null {
   return full ?? null;
 }
 
-/**
- * If a single extracted CITATION references a US state other than the
- * jurisdiction, return that state's name; otherwise null.
- *
- * Precision is the whole point: we look for the foreign state ONLY inside the
- * citation string (e.g. "Texas Property Code § 92.109" or "Tex. Civ. Code"),
- * NOT anywhere in the letter. A letter that merely mentions an out-of-state
- * party or address ("recipient headquartered in Texas, governed by California
- * law") produces no foreign-state CITATION, so it is not flagged — fixing the
- * over-broad jurisdiction-mismatch false positive.
- */
-function citationForeignState(citation: string, jurName: string | null): string | null {
-  const lower = citation.toLowerCase();
-  for (const name of US_STATE_NAMES) {
-    if (new RegExp(`\\b${name}\\b`, "i").test(citation)) {
-      if (!jurName || name.toLowerCase() !== jurName.toLowerCase()) return name;
-    }
+/** Find a foreign US state named within `window` (full name or legal abbrev). */
+function foreignStateInWindow(window: string, jurName: string | null): string | null {
+  // Abbrevs first (more specific). Require a non-letter boundary before the
+  // abbrev so "or." matches but "fork." does not.
+  for (const [abbr, name] of Object.entries(STATE_LEGAL_ABBREV)) {
+    if (jurName && name.toLowerCase() === jurName.toLowerCase()) continue;
+    if (new RegExp(`(?:^|[^A-Za-z])${escapeRegExp(abbr)}`, "i").test(window)) return name;
   }
-  for (const [abbr, name] of Object.entries(REPORTER_ABBREV_TO_STATE)) {
-    if (lower.includes(abbr)) {
-      if (!jurName || name.toLowerCase() !== jurName.toLowerCase()) return name;
-    }
+  for (const name of US_STATE_NAMES) {
+    if (jurName && name.toLowerCase() === jurName.toLowerCase()) continue;
+    if (new RegExp(`\\b${name}\\b`, "i").test(window)) return name;
   }
   return null;
+}
+
+/**
+ * Detect foreign-state STATUTORY citations in the letter. For each statutory
+ * marker (§ N, "Rev. Stat.", "<X> Code", …) we inspect the ~45 chars leading up
+ * to it for a state token. Precise on two axes:
+ *   - only fires on statutory authority (a marker is required), so federal case
+ *     names with state parties ("Texas v. Johnson") are NOT flagged; and
+ *   - only fires when the state token sits in the citation's lead-in, so an
+ *     out-of-state party/address mentioned elsewhere is NOT flagged.
+ */
+function detectForeignStateStatutes(text: string, jurName: string | null): string[] {
+  const found = new Set<string>();
+  STATUTE_MARKER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = STATUTE_MARKER_RE.exec(text)) !== null) {
+    const start = Math.max(0, m.index - 45);
+    const window = text.slice(start, m.index + m[0].length);
+    const fs = foreignStateInWindow(window, jurName);
+    if (fs) found.add(fs);
+    if (STATUTE_MARKER_RE.lastIndex === m.index) STATUTE_MARKER_RE.lastIndex++;
+  }
+  return Array.from(found);
 }
 
 /**
@@ -135,22 +162,27 @@ export function runDeterministicVettingChecks(
   } as unknown as Parameters<typeof validateContentConsistency>[1];
   try {
     const consistency = validateContentConsistency(letter, consistencyInput);
-    for (const w of consistency.warnings) warnings.push(`CONSISTENCY: ${w}`);
+    for (const w of consistency.warnings) {
+      // Drop validateContentConsistency's broad jurisdiction-mismatch heuristic
+      // (it fires on a bare out-of-state party/address near the word "law").
+      // The citation-scoped gate below is the authoritative jurisdiction signal;
+      // surfacing the legacy one too would show attorneys a false "foreign legal
+      // authority" warning.
+      if (/jurisdiction mismatch/i.test(w)) continue;
+      warnings.push(`CONSISTENCY: ${w}`);
+    }
   } catch {
     // A validator regex path must never crash vetting — fail open to the LLM grade.
   }
 
-  // Hard gate: a foreign-state reference inside an actual citation.
+  // Hard gate: a foreign-state STATUTORY citation (precise — excludes case names
+  // and bare out-of-state party/address mentions; covers all 50 states).
   const citations = extractCitationsFromText(letter);
   const jurName = resolveStateName(ctx.jurisdictionState ?? ctx.jurisdiction);
-  const foreign: string[] = [];
-  for (const c of citations) {
-    const fs = citationForeignState(c, jurName);
-    if (fs) foreign.push(`"${c}" → ${fs}`);
-  }
+  const foreignStates = detectForeignStateStatutes(letter, jurName);
   const jurisdictionMismatch =
-    foreign.length > 0
-      ? `JURISDICTION MISMATCH: letter cites non-${jurName ?? ctx.jurisdiction} authority — ${foreign.join("; ")}`
+    foreignStates.length > 0
+      ? `JURISDICTION MISMATCH: letter cites non-${jurName ?? ctx.jurisdiction} statutory authority (${foreignStates.join(", ")})`
       : null;
 
   for (const c of citations.slice(0, 20)) {

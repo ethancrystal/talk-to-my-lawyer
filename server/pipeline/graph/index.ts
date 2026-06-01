@@ -289,16 +289,17 @@ export interface RunLangGraphPipelineOptions {
   intake: Record<string, any>;
   isFreePreview?: boolean;
   /**
-   * LangGraph checkpoint thread id. Defaults to `letter_${letterId}`.
+   * LangGraph checkpoint thread id. Defaults to a FRESH per-invocation id
+   * (`letter_${letterId}_<timestamp>`).
    *
    * IMPORTANT: the checkpointer is a durable PostgresSaver. With a STABLE
    * thread id, a re-run of the same letter (admin re-submit, rejected→submitted
    * recovery edge, or a brand-new pg-boss delivery after supersede) would RESUME
    * the prior run's persisted checkpoint instead of starting fresh — and could
-   * finalize a stale/degraded draft. Callers that are starting a fresh run
-   * (i.e. after markPriorPipelineRunsSuperseded) should pass a per-invocation
-   * unique id so the graph always starts clean. finalizeNode is idempotent, so
-   * a fresh re-run after a crash is safe.
+   * finalize a stale/degraded draft. The fresh default means every caller starts
+   * clean without having to remember to pass an id. Pass an explicit, stable
+   * threadId ONLY to intentionally resume an interrupted run. finalizeNode is
+   * idempotent, so a fresh re-run after a crash is safe.
    */
   threadId?: string;
 }
@@ -314,7 +315,11 @@ export async function runLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): Promise<PipelineStateType> {
   const { letterId, userId = 0, intake, isFreePreview = false, threadId } = opts;
-  const checkpointThreadId = threadId ?? `letter_${letterId}`;
+  // Default to a FRESH per-invocation thread id so ANY caller that doesn't pass
+  // one (e.g. the PIPELINE_MODE=langgraph shim in pipeline/langgraph.ts) still
+  // starts clean and never resumes a stale PostgresSaver checkpoint. Pass an
+  // explicit threadId only to intentionally resume. finalizeNode is idempotent.
+  const checkpointThreadId = threadId ?? `letter_${letterId}_${Date.now()}`;
 
   log.info(
     { letterId, isFreePreview, checkpointThreadId },

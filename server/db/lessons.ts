@@ -80,6 +80,10 @@ export const TRUSTED_LESSON_SOURCE_ACTIONS = [
   "attorney_edit",
   // Admin-curated via /admin/learning — admin-authored, NOT subscriber-authored.
   "manual",
+  // AI-merged lessons from the weekly consolidation job. Safe because the job
+  // only consolidates already-trusted source lessons (see consolidateLessonsForScope);
+  // without this, consolidation would silently drop curated guidance from prompts.
+  "consolidation",
 ] as const;
 
 export async function getActiveLessons(filters: {

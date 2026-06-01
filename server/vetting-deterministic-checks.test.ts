@@ -50,6 +50,23 @@ describe("runDeterministicVettingChecks — deterministic legal-safety layer", (
     expect(result.jurisdictionMismatch).toBeNull();
   });
 
+  it("degrades on an ABBREVIATED foreign-state statute (e.g. Ariz. Rev. Stat.)", () => {
+    const letter = `Dear Bob Landlord,\n\nPursuant to Ariz. Rev. Stat. § 33-1321, Alice Subscriber demands return of the deposit.\n\nSincerely,\nAlice Subscriber`;
+    const result = runDeterministicVettingChecks(letter, caCtx);
+    expect(result.degraded).toBe(true);
+    expect(result.jurisdictionMismatch).toMatch(/Arizona/);
+  });
+
+  it("does NOT degrade a federal case whose party name is a state (e.g. Texas v. Johnson)", () => {
+    // "Texas" here is a case party, near the word "Court" — the old broad
+    // heuristic flagged this; the citation-scoped statute gate must not, because
+    // there is no statutory marker attributing Texas law.
+    const letter = `Dear Bob Landlord,\n\nAs the Supreme Court held in Texas v. Johnson, 491 U.S. 397, the First Amendment protects expression. This matter is governed by California law.\n\nSincerely,\nAlice Subscriber`;
+    const result = runDeterministicVettingChecks(letter, caCtx);
+    expect(result.degraded).toBe(false);
+    expect(result.jurisdictionMismatch).toBeNull();
+  });
+
   it("surfaces every citation as an explicit attorney-verification warning (research is ungrounded)", () => {
     const letter = `Dear Bob Landlord,\n\nUnder California Civil Code § 1950.5, Alice Subscriber demands payment within 14 days.\n\nSincerely,\nAlice Subscriber`;
     const result = runDeterministicVettingChecks(letter, caCtx);

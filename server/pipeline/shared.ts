@@ -548,15 +548,21 @@ async function findSimilarLessons(
     if (!db) return [];
 
     const vectorStr = `[${embedding.join(",")}]`;
+    // JOIN back to pipeline_lessons to surface source_action — match_lessons()'s
+    // RETURNS TABLE does not include it, and the trusted-source post-filter in
+    // buildLessonsPromptBlock needs it (otherwise every semantic hit is dropped
+    // because l.source_action is undefined).
     const results = await db.execute(sql`
-      SELECT * FROM match_lessons(
+      SELECT m.*, pl.source_action
+      FROM match_lessons(
         ${vectorStr}::vector,
         0.65,
         ${limit},
         ${letterType},
         ${jurisdiction ?? null},
         ${stage}
-      )
+      ) AS m
+      JOIN pipeline_lessons pl ON pl.id = m.id
     `);
     return results as any[];
   } catch (err) {
