@@ -142,3 +142,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - How to Evict a Tenant in California: The Complete Step-by-Step Legal Guide (2026) (LONG)
 - Car Accident Demand Letter in California: What to Include and How Much to Ask For (2026 Guide) (LONG)
 - Which Type of Legal Letter Do You Actually Need? A California Decision Guide (2026) (LONG)
+
+
+## 2026-05-31 (Sunday — Comparison / Pricing / Process)
+- Is a $199 Attorney Demand Letter Worth It for a Small Debt in California? (SHORT)
+- Flat-Fee vs. Hourly Lawyer: Which Is Cheaper for a Single Legal Letter in California? (SHORT)
+- LegalZoom vs. an Attorney-Signed Demand Letter: What's the Real Difference in California? (SHORT)
+- Do I Need to Pay a Lawyer a Retainer Just to Send One Letter in California? (SHORT)
+- Online Legal Letter Services vs. a Local Attorney in California: Which Should You Choose? (SHORT)
+- The True Cost of Resolving a Dispute in California (2026): DIY vs. Demand Letter vs. Small Claims vs. Hiring a Lawyer (LONG)
+- Letter, Mediation, Small Claims, or Lawsuit? A California Dispute-Resolution Decision Guide (2026) (LONG)
+- What Does a Lawyer Actually Cost in California in 2026? Flat Fees, Hourly Rates, Contingency, and Retainers Explained (LONG)
+- Demand Letter vs. Mediation vs. Arbitration vs. Court in California: The Complete Cost-and-Time Comparison (2026) (LONG)
+- Small Claims Court in California (2026): The Complete Guide to Costs, Limits, Process, and Whether It's Worth It (LONG)
