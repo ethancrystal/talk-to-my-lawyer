@@ -52,6 +52,11 @@ def candidate_blog_dirs() -> list[Path]:
     out: list[Path] = []
     if env_dir := os.environ.get("TTML_BLOG_DIR", "").strip():
         out.append(Path(env_dir))
+    # Canonical tesla_laptops checkout — preferred so publishes read the same
+    # blog/ even when invoked from another Windows profile.
+    canonical = Path(r"C:\home\tesla_laptops\ttml-app-work") / "blog"
+    if canonical.is_dir():
+        out.append(canonical)
     out.append(Path.cwd() / "blog")
     out.append(Path.cwd().parent / "blog")
     if repo := _repo_root_from_script():
