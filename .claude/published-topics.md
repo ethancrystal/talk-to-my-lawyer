@@ -155,3 +155,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - What Does a Lawyer Actually Cost in California in 2026? Flat Fees, Hourly Rates, Contingency, and Retainers Explained (LONG)
 - Demand Letter vs. Mediation vs. Arbitration vs. Court in California: The Complete Cost-and-Time Comparison (2026) (LONG)
 - Small Claims Court in California (2026): The Complete Guide to Costs, Limits, Process, and Whether It's Worth It (LONG)
+
+
+## 2026-06-02 (Tuesday — Contractor / Construction Disputes)
+- A Contractor Filed a Mechanics Lien on My House in California — What Can I Do? (SHORT)
+- What Is a Notice of Intent to Lien and Does It Actually Work in California? (SHORT)
+- How California Contractors Can Collect a Final Payment a Client Refuses to Pay (SHORT)
+- Mechanics Lien vs. Demand Letter: Which Gets a California Contractor Paid Faster? (SHORT)
+- I Hired an Unlicensed Contractor in California and the Job Went Wrong — Can I Get My Money Back? (SHORT)
+- The California Contractor's Complete Guide to Getting Paid in 2026: Liens, Prompt Payment, and Demand Letters (LONG)
+- Mechanics Lien vs. Stop Payment Notice vs. Demand Letter vs. Small Claims: How California Contractors Actually Get Paid (LONG)
+- Construction Cost Overruns in California: When You Must Pay More Than the Estimate — and When You Don't (LONG)
+- California's Right to Repair Act (SB 800): How Homeowners Must Handle Construction Defects Before Suing (LONG)
+- Home Improvement Contracts in California: The Legal Rules Every Homeowner and Contractor Should Know (2026) (LONG)
