@@ -1,0 +1,20 @@
+# Build-context ignore for `docker build -f Dockerfile.ci` (BuildKit auto-selects
+# this file over the default .dockerignore).
+#
+# Unlike the default .dockerignore, this KEEPS *.test.ts / *.spec.ts and all
+# *.md prompt templates so the CI image can run the full vitest suite and build.
+# Only genuinely unneeded or host-specific artifacts are excluded.
+node_modules
+dist
+.git
+.env
+.env.*
+!.env.example
+coverage
+.nyc_output
+playwright-report
+test-results
+.smoke-test-output
+*.log
+.DS_Store
+Thumbs.db
