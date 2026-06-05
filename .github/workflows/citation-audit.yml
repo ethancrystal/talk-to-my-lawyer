@@ -11,7 +11,7 @@ on:
 jobs:
   audit:
     name: Measure AI citation frequency → update .claude/citation-scores.md
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
 
     steps:
