@@ -12,6 +12,7 @@ import {
   getDistinctLessonScopes,
   archiveStaleIneffectiveLessons,
   createPipelineLesson,
+  TRUSTED_LESSON_SOURCE_ACTIONS,
 } from "../db";
 import { addServerBreadcrumb, captureServerException } from "../sentry";
 import type { InsertPipelineLesson } from "../../drizzle/schema";
@@ -149,10 +150,17 @@ export async function consolidateLessonsForScope(
   letterType: string,
   jurisdiction: string | null
 ): Promise<{ consolidated: number; deactivated: number }> {
-  const lessons = await getActiveLessonsForScope({
+  const allLessons = await getActiveLessonsForScope({
     letterType,
     jurisdiction: jurisdiction ?? undefined,
   });
+  // SECURITY: only consolidate TRUSTED-source lessons. The merged row is written
+  // with sourceAction "consolidation" (which IS injectable), so consolidating an
+  // untrusted subscriber lesson here would launder it into trusted prompt guidance.
+  const trustedSources = TRUSTED_LESSON_SOURCE_ACTIONS as readonly string[];
+  const lessons = (allLessons ?? []).filter((l) =>
+    trustedSources.includes((l as { sourceAction?: string }).sourceAction ?? ""),
+  );
   if (!lessons || lessons.length < 2) {
     return { consolidated: 0, deactivated: 0 };
   }

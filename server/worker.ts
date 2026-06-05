@@ -97,6 +97,11 @@ async function runQueuedLangGraphPipeline(
   isFreePreview: boolean
 ): Promise<PipelineStateType> {
   const pipelineId = data.letterId;
+  // Per-invocation checkpoint thread id (see runLangGraphPipeline().threadId):
+  // a stable letter_<id> would resume a stale PostgresSaver checkpoint on a
+  // re-run/supersede and could finalize an old draft. finalizeNode is idempotent,
+  // so starting fresh every run is safe.
+  const checkpointThreadId = `letter_${pipelineId}_${Date.now()}`;
   await updatePipelineRecord(pipelineId, {
     status: "running",
     currentStep: "init",
@@ -125,7 +130,7 @@ async function runQueuedLangGraphPipeline(
     const graph = await getGraphWithCheckpointer();
     for await (const event of await graph.streamEvents(initialState, {
       version: "v2",
-      configurable: { thread_id: `letter_${pipelineId}` },
+      configurable: { thread_id: checkpointThreadId },
     })) {
       const eventName = getGraphNodeName(event.name);
       if (event.event === "on_chain_start" && eventName) {
@@ -421,6 +426,12 @@ export async function processRunPipeline(
           userId,
           intake: intake as Record<string, any>,
           isFreePreview: isPreviewGatedSubmission,
+          // Fresh checkpoint thread per invocation: we just superseded prior
+          // runs, so this is a clean start. A stable `letter_${id}` thread would
+          // make a durable PostgresSaver RESUME a stale prior checkpoint and
+          // could finalize an old draft. finalizeNode is idempotent, so a
+          // re-run after a crash safely no-ops if the letter already finalized.
+          threadId: `letter_${letterId}_${Date.now()}`,
         });
         logger.info(`[Worker] Paid subscriber LangGraph pipeline completed for letter #${letterId}`);
         return;

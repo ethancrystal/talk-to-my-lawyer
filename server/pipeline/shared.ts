@@ -1,4 +1,4 @@
-import { getActiveLessons, incrementLessonInjectionStats } from "../db";
+import { TRUSTED_LESSON_SOURCE_ACTIONS, getActiveLessons, incrementLessonInjectionStats } from "../db";
 import type { PipelineContext, PipelineErrorCode } from "../../shared/types";
 import { createPipelineError, PIPELINE_ERROR_CODES } from "../../shared/types";
 import { captureServerException } from "../sentry";
@@ -548,15 +548,21 @@ async function findSimilarLessons(
     if (!db) return [];
 
     const vectorStr = `[${embedding.join(",")}]`;
+    // JOIN back to pipeline_lessons to surface source_action — match_lessons()'s
+    // RETURNS TABLE does not include it, and the trusted-source post-filter in
+    // buildLessonsPromptBlock needs it (otherwise every semantic hit is dropped
+    // because l.source_action is undefined).
     const results = await db.execute(sql`
-      SELECT * FROM match_lessons(
+      SELECT m.*, pl.source_action
+      FROM match_lessons(
         ${vectorStr}::vector,
         0.65,
         ${limit},
         ${letterType},
         ${jurisdiction ?? null},
         ${stage}
-      )
+      ) AS m
+      JOIN pipeline_lessons pl ON pl.id = m.id
     `);
     return results as any[];
   } catch (err) {
@@ -580,6 +586,9 @@ export async function buildLessonsPromptBlock(
       letterType,
       jurisdiction: jurisdiction ?? undefined,
       pipelineStage: stage,
+      // SECURITY: attorney-authored lessons only — never inject subscriber
+      // feedback into prompts as trusted guidance (see lessons.ts).
+      sourceActions: TRUSTED_LESSON_SOURCE_ACTIONS,
       limit: 10,
     });
 
@@ -596,10 +605,17 @@ export async function buildLessonsPromptBlock(
       );
     }
 
-    // Merge: primary lessons first, then semantic additions not already covered
+    // Merge: primary lessons first, then semantic additions not already covered.
+    // SECURITY: the match_lessons() SQL function (semantic search) filters only
+    // by type/jurisdiction/stage, NOT source_action — so post-filter the
+    // semantic hits to the same trusted set as the primary query. Otherwise
+    // subscriber-authored lessons could re-enter the prompt via the semantic
+    // path even though getActiveLessons already excludes them. Rows whose
+    // source_action is not trusted (incl. missing) are dropped.
+    const trustedSources = TRUSTED_LESSON_SOURCE_ACTIONS as readonly string[];
     const primaryIds = new Set((primaryLessons ?? []).map((l: any) => l.id));
     const additionalSemantic = semanticLessons.filter(
-      (l: any) => !primaryIds.has(l.id)
+      (l: any) => !primaryIds.has(l.id) && trustedSources.includes(l.source_action)
     );
     const lessons = [...(primaryLessons ?? []), ...additionalSemantic];
 

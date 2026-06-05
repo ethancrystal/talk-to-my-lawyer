@@ -66,7 +66,7 @@ export async function draftNode(
     ? `\n\nResearch findings: ${JSON.stringify(researchPacket)}`
     : "";
   const unverifiedWarning = researchUnverified
-    ? "\n\nNOTE: Research was not web-grounded. Proceed with standard legal caution."
+    ? `\n\nCRITICAL — research is NOT web-verified: Do NOT cite specific statute section numbers, case names, docket numbers, or decision dates UNLESS they are extremely well-known and unambiguous for ${ctx.jurisdiction} (e.g. Cal. Civ. Code § 1950.5). For any other legal authority, describe the rule in plain language and write "[STATUTE — ATTORNEY TO VERIFY]" or "[CASE — ATTORNEY TO VERIFY]" instead of guessing. An honest placeholder is acceptable; a fabricated citation is not.`
     : "";
   const lessonsBlock = buildLessonsBlock(lessons);
   // On a redraft loop the model needs to see what failed last time —
@@ -85,10 +85,18 @@ Format requirements:
 - Target length: roughly 1 to 2 pages (300–800 words) — never truncate mid-sentence.
 - End with a clear signature block matching the sender name; do not omit the closing.
 
+Jurisdiction discipline (CRITICAL):
+- This matter is governed by ${ctx.jurisdiction} law. EVERY statute, code, or case you cite MUST be from ${ctx.jurisdiction} or applicable U.S. federal law.
+- Do NOT cite the law of any other U.S. state. If you name a state code, it must be a ${ctx.jurisdiction} code.
+
 Anti-hallucination rules (CRITICAL):
 - Do NOT invent statutes, case names, citation numbers, or court decisions. If you reference a law or case, it must come from the research findings below or be a well-known statute in ${ctx.jurisdiction}.
 - Do NOT invent facts, dates, dollar amounts, addresses, or parties beyond what the intake explicitly provides.
 - If the intake is missing a detail you would normally include, write a clear placeholder like "[INSERT DATE]" rather than fabricating one.
+
+Professional-conduct rules (CRITICAL):
+- Do NOT guarantee or predict legal outcomes — avoid "you will lose", "a court will rule", "you are liable". State the sender's position and what the law provides, not certainties.
+- Do NOT claim to be an attorney or that this letter is legal advice. A licensed attorney reviews every letter before it is sent.
 
 Jurisdiction: ${ctx.jurisdiction}
 Letter type: ${ctx.letterType}

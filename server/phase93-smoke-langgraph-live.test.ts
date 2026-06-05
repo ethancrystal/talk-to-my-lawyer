@@ -74,6 +74,14 @@ vi.mock("./db", () => ({
   updateWorkflowJob: vi.fn().mockResolvedValue(undefined),
   updateLetterVersionPointers: vi.fn().mockResolvedValue(undefined),
   getActiveLessons: vi.fn().mockResolvedValue([]),
+  // init.ts imports this for the attorney-only lesson filter; vitest requires
+  // every accessed named export to exist on the mock.
+  TRUSTED_LESSON_SOURCE_ACTIONS: [
+    "attorney_approval",
+    "attorney_rejection",
+    "attorney_changes",
+    "attorney_edit",
+  ],
   hasLetterBeenPreviouslyUnlocked: vi.fn().mockResolvedValue(false),
   getLetterRequestById: vi.fn().mockImplementation(async (letterId: number) => ({
     id: letterId,

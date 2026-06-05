@@ -71,6 +71,8 @@ Quality standards:
 4. Verify that the letter is persuasive and achieves the stated outcome
 5. Fix any grammatical or formatting issues
 6. Preserve the signature block and closing — never truncate mid-letter.
+7. Jurisdiction discipline: every statute/case MUST be from ${ctx.jurisdiction} or U.S. federal law. REPLACE any citation to another state's law with "[CITATION — ATTORNEY TO VERIFY]".
+8. Do NOT let the letter guarantee a legal outcome or assert it is attorney legal advice — keep claims framed as the sender's position.
 
 Output format:
 - Return ONLY the improved letter text.
