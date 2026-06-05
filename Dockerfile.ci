@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.ci — reproducible CI gate that does NOT use GitHub Actions.
+#
+# Mirrors the `build-and-test` job in .github/workflows/ci.yml:
+#     pnpm install --frozen-lockfile → pnpm check → pnpm test → pnpm build
+# (i.e. `pnpm revalidate`), but runs entirely in Docker, so it does not consume
+# GitHub-hosted runner minutes or depend on the account's Actions billing.
+#
+# A non-zero `docker build` exit == a failing gate, exactly like CI.
+#
+# Usage (see scripts/ci-docker.sh for a friendly wrapper):
+#     docker build -f Dockerfile.ci .                   # full gate (default)
+#     docker build -f Dockerfile.ci --target check .    # tsc only
+#     docker build -f Dockerfile.ci --target test  .    # vitest only
+#     docker build -f Dockerfile.ci --target build .    # vite + esbuild only
+#
+# Notes:
+#  • The default .dockerignore excludes *.test.ts, so this build relies on
+#    Dockerfile.ci.dockerignore (BuildKit auto-selects <dockerfile>.dockerignore)
+#    which keeps the test files in the build context.
+#  • No Chromium is installed: scripts/prerender.ts degrades gracefully when
+#    puppeteer cannot launch, so `pnpm build` still succeeds without it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── deps: install node_modules (layer-cached unless the lockfile changes) ─────
+FROM node:22-bookworm-slim AS deps
+WORKDIR /app
+
+ENV CI=true \
+    PUPPETEER_SKIP_DOWNLOAD=true
+
+# Pin pnpm to the repo's packageManager version — .npmrc sets
+# package-manager-strict=true, so a mismatched pnpm would refuse to install.
+RUN npm install -g pnpm@10.4.1 --no-fund --no-audit
+
+# Lockfile + manifest + patches first, for maximum layer caching.
+COPY package.json pnpm-lock.yaml .npmrc ./
+COPY patches/ ./patches/
+
+# Faithful to GitHub CI: frozen lockfile. If the lockfile has drifted from
+# package.json the install fails (a real signal). Override at build time with
+#     --build-arg PNPM_INSTALL_FLAGS=--no-frozen-lockfile
+ARG PNPM_INSTALL_FLAGS=--frozen-lockfile
+RUN pnpm install ${PNPM_INSTALL_FLAGS}
+
+# ── source: the full repo on top of the installed node_modules ───────────────
+FROM deps AS source
+# Dockerfile.ci.dockerignore excludes node_modules/dist/.git/.env* so this COPY
+# brings source + tests without clobbering the modules installed in `deps`.
+COPY . .
+
+# ── individual gates (each FROM source so they can run in isolation) ──────────
+FROM source AS check
+RUN pnpm check
+
+FROM source AS test
+RUN pnpm test
+
+FROM source AS build
+RUN pnpm build
+
+# ── default target: the full revalidate gate, fail-fast like GitHub ──────────
+FROM source AS revalidate
+RUN pnpm check && pnpm test && pnpm build

@@ -8,7 +8,17 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # Runs on a self-hosted runner (see docs/SELF_HOSTED_RUNNER.md) so CI works
+    # without GitHub-hosted minutes. To revert to GitHub-hosted, set this back to
+    # `runs-on: ubuntu-latest` and drop the `if:` guard below.
+    #
+    # SECURITY (this repo is PUBLIC): never execute untrusted fork-PR code on the
+    # self-hosted machine. This guard runs the job for pushes and same-repo PRs
+    # only — pull requests opened from forks are skipped.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v6
 
@@ -25,7 +35,11 @@ jobs:
         run: pnpm revalidate
 
   e2e:
-    runs-on: ubuntu-latest
+    # Same self-hosted runner + fork-PR guard as build-and-test.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64]
     needs: build-and-test
     # Non-blocking until the dev-server boot env (DATABASE_URL, SUPABASE_*)
     # is wired into this job. Playwright's webServer (`npm run dev`) needs
