@@ -16,7 +16,13 @@ export function getStripe(): Stripe {
       throw new Error("STRIPE_SECRET_KEY is not configured");
     }
     _stripe = new Stripe(ENV.stripeSecretKey, {
-      apiVersion: "2026-04-22.dahlia",
+      // The Stripe SDK's types only reflect its latest API version
+      // ("2026-04-22.dahlia"), but we intentionally pin the account's current
+      // version. Per Stripe's own guidance (see the StripeConfig.apiVersion
+      // doc comment), suppress the resulting type mismatch. @ts-expect-error
+      // self-removes if the pinned version ever matches the SDK's latest.
+      // @ts-expect-error pinning an older API version than the SDK's latest
+      apiVersion: "2026-02-25.clover",
     });
   }
   return _stripe;

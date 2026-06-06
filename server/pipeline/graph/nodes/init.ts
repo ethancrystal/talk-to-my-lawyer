@@ -24,7 +24,11 @@
 
 import { HumanMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
-import { createWorkflowJob, getActiveLessons } from "../../../db";
+import {
+  TRUSTED_LESSON_SOURCE_ACTIONS,
+  createWorkflowJob,
+  getActiveLessons,
+} from "../../../db";
 import {
   breadcrumb,
   normalizeIntake,
@@ -74,6 +78,11 @@ export async function initNode(
     const rows = await getActiveLessons({
       letterType: normalized.letterType,
       jurisdiction: normalized.jurisdictionState ?? normalized.jurisdictionCountry,
+      // SECURITY: inject ONLY attorney-authored lessons. Subscriber feedback is
+      // also stored in pipeline_lessons (subscriber_update / subscriber_retry)
+      // and must never be presented to the model as trusted guidance — that is
+      // a stored prompt-injection vector across letters in the same scope.
+      sourceActions: TRUSTED_LESSON_SOURCE_ACTIONS,
       limit: 10,
     });
     lessons = (rows ?? []).map((r: any) => ({

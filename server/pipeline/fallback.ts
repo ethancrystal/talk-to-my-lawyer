@@ -44,6 +44,7 @@ import {
   finalizeDraftPreviewStatus,
   isLetterPreviewGated,
 } from "./preview-gate";
+import { validateFinalLetter } from "./validators";
 
 const fallbackLogger = createLogger({ module: "PipelineFallback" });
 
@@ -148,8 +149,11 @@ export async function bestEffortFallback(opts: {
     let fallbackContent: string | null = null;
     let fallbackSource = "unknown";
 
-    // 1. In-memory content captured progressively as stages completed
-    if (intermediateDraftContent) {
+    // 1. In-memory content captured progressively as stages completed.
+    // Only accept a structurally valid letter — a half-streamed or truncated
+    // intermediate must fall through to a better source / the skeleton rather
+    // than be delivered to the attorney as the official ai_draft.
+    if (intermediateDraftContent && validateFinalLetter(intermediateDraftContent).valid) {
       fallbackContent = intermediateDraftContent;
       fallbackSource = "in_memory_intermediate";
     }
@@ -164,7 +168,7 @@ export async function bestEffortFallback(opts: {
           const existingVersion = await getLetterVersionById(
             letterRecord.currentAiDraftVersionId
           );
-          if (existingVersion?.content) {
+          if (existingVersion?.content && validateFinalLetter(existingVersion.content).valid) {
             fallbackContent = existingVersion.content;
             fallbackSource = "db_ai_draft_pointer";
           }
@@ -181,7 +185,7 @@ export async function bestEffortFallback(opts: {
             true
           );
           const candidate = allVersions.find(
-            v => v.content && v.content.length > 50
+            v => v.content && validateFinalLetter(v.content).valid
           );
           if (candidate?.content) {
             fallbackContent = candidate.content;

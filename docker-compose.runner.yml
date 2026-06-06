@@ -1,0 +1,26 @@
+# Self-hosted GitHub Actions runner for moizj00/ttml-app.
+#
+#   1. cp .env.runner.example .env.runner     # then fill in GH_PAT
+#   2. docker compose -f docker-compose.runner.yml up -d --build
+#   3. Confirm it shows as "Idle" under repo → Settings → Actions → Runners
+#
+# It picks up jobs that target `runs-on: [self-hosted, linux, x64]`
+# (see .github/workflows/ci.yml). Stop + deregister with:
+#   docker compose -f docker-compose.runner.yml down
+#
+# ⚠️  This repo is PUBLIC — keep the fork-PR guard in ci.yml so untrusted code
+#     never runs on this machine. See docs/SELF_HOSTED_RUNNER.md.
+services:
+  runner:
+    build:
+      context: ./.github/actions-runner
+    env_file: .env.runner
+    restart: unless-stopped
+    # Give the entrypoint time to deregister on `down`.
+    stop_signal: SIGTERM
+    stop_grace_period: 40s
+    volumes:
+      - runner-work:/home/runner/_work
+
+volumes:
+  runner-work:

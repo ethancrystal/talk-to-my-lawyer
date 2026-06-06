@@ -288,6 +288,20 @@ export interface RunLangGraphPipelineOptions {
   userId?: number;
   intake: Record<string, any>;
   isFreePreview?: boolean;
+  /**
+   * LangGraph checkpoint thread id. Defaults to a FRESH per-invocation id
+   * (`letter_${letterId}_<timestamp>`).
+   *
+   * IMPORTANT: the checkpointer is a durable PostgresSaver. With a STABLE
+   * thread id, a re-run of the same letter (admin re-submit, rejected→submitted
+   * recovery edge, or a brand-new pg-boss delivery after supersede) would RESUME
+   * the prior run's persisted checkpoint instead of starting fresh — and could
+   * finalize a stale/degraded draft. The fresh default means every caller starts
+   * clean without having to remember to pass an id. Pass an explicit, stable
+   * threadId ONLY to intentionally resume an interrupted run. finalizeNode is
+   * idempotent, so a fresh re-run after a crash is safe.
+   */
+  threadId?: string;
 }
 
 /**
@@ -300,9 +314,17 @@ export interface RunLangGraphPipelineOptions {
 export async function runLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): Promise<PipelineStateType> {
-  const { letterId, userId = 0, intake, isFreePreview = false } = opts;
+  const { letterId, userId = 0, intake, isFreePreview = false, threadId } = opts;
+  // Default to a FRESH per-invocation thread id so ANY caller that doesn't pass
+  // one (e.g. the PIPELINE_MODE=langgraph shim in pipeline/langgraph.ts) still
+  // starts clean and never resumes a stale PostgresSaver checkpoint. Pass an
+  // explicit threadId only to intentionally resume. finalizeNode is idempotent.
+  const checkpointThreadId = threadId ?? `letter_${letterId}_${Date.now()}`;
 
-  log.info({ letterId, isFreePreview }, "[Graph] Starting LangGraph pipeline");
+  log.info(
+    { letterId, isFreePreview, checkpointThreadId },
+    "[Graph] Starting LangGraph pipeline",
+  );
 
   const graph = await getGraphWithCheckpointer();
 
@@ -320,7 +342,7 @@ export async function runLangGraphPipeline(
   };
 
   const finalState = await graph.invoke(initialState, {
-    configurable: { thread_id: `letter_${letterId}` },
+    configurable: { thread_id: checkpointThreadId },
   });
 
   if (finalState.currentStage === "failed") {
@@ -350,7 +372,7 @@ export async function runLangGraphPipeline(
 export async function* streamLangGraphPipeline(
   opts: RunLangGraphPipelineOptions
 ): AsyncGenerator<{ node: string; state: Partial<PipelineStateType> }> {
-  const { letterId, userId = 0, intake } = opts;
+  const { letterId, userId = 0, intake, threadId } = opts;
   const graph = await getGraphWithCheckpointer();
 
   const initialState: Partial<PipelineStateType> = {
@@ -367,7 +389,9 @@ export async function* streamLangGraphPipeline(
 
   for await (const event of await graph.streamEvents(initialState, {
     version: "v2",
-    configurable: { thread_id: `letter_${letterId}` },
+    // Per-invocation thread id by default (avoids stale checkpoint resume),
+    // overridable by the caller for an intentional resume.
+    configurable: { thread_id: threadId ?? `letter_${letterId}_${Date.now()}` },
   })) {
     if (event.event === "on_chain_end" && event.name !== "LangGraph") {
       yield {

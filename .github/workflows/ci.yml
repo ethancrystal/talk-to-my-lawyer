@@ -8,11 +8,11 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -25,7 +25,7 @@ jobs:
         run: pnpm revalidate
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-and-test
     # Non-blocking until the dev-server boot env (DATABASE_URL, SUPABASE_*)
     # is wired into this job. Playwright's webServer (`npm run dev`) needs
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:

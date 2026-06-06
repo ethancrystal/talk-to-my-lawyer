@@ -67,10 +67,32 @@ export async function createPipelineLesson(data: InsertPipelineLesson) {
   return inserted;
 }
 
+/** source_action values that are SAFE to inject into generation prompts:
+ *  attorney review actions PLUS admin-curated "manual" lessons authored via
+ *  /admin/learning. SECURITY: subscriber-authored feedback (source_action
+ *  subscriber_update / subscriber_retry) is deliberately EXCLUDED — injecting it
+ *  as trusted guidance is a stored prompt-injection vector across every letter
+ *  sharing the same scope. */
+export const TRUSTED_LESSON_SOURCE_ACTIONS = [
+  "attorney_approval",
+  "attorney_rejection",
+  "attorney_changes",
+  "attorney_edit",
+  // Admin-curated via /admin/learning — admin-authored, NOT subscriber-authored.
+  "manual",
+  // AI-merged lessons from the weekly consolidation job. Safe because the job
+  // only consolidates already-trusted source lessons (see consolidateLessonsForScope);
+  // without this, consolidation would silently drop curated guidance from prompts.
+  "consolidation",
+] as const;
+
 export async function getActiveLessons(filters: {
   letterType?: string;
   jurisdiction?: string;
   pipelineStage?: string;
+  /** Restrict to lessons authored by these source actions. Callers injecting
+   *  lessons into LLM prompts MUST pass TRUSTED_LESSON_SOURCE_ACTIONS. */
+  sourceActions?: readonly string[];
   limit?: number;
 }) {
   const db = await getReadDb();
@@ -99,6 +121,14 @@ export async function getActiveLessons(filters: {
       ${filters.letterType ? sql`AND (letter_type = ${filters.letterType} OR letter_type IS NULL)` : sql``}
       ${filters.jurisdiction ? sql`AND (jurisdiction = ${filters.jurisdiction} OR jurisdiction IS NULL)` : sql``}
       ${filters.pipelineStage ? sql`AND (pipeline_stage = ${filters.pipelineStage} OR pipeline_stage IS NULL)` : sql``}
+      ${
+        filters.sourceActions && filters.sourceActions.length > 0
+          ? sql`AND source_action::text IN (${sql.join(
+              filters.sourceActions.map((a) => sql`${a}`),
+              sql`, `,
+            )})`
+          : sql``
+      }
     ORDER BY effective_score DESC
     LIMIT ${filters.limit ?? 10}
   `);
