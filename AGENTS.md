@@ -303,7 +303,7 @@ The local 4-stage pipeline is the sole active production path. n8n is dormant.
 | 1. Research | OpenAI | `gpt-4o-search-preview` | Web-grounded legal research | 90s |
 | 2. Draft | Anthropic | `claude-sonnet-4-5-20250929` | Initial legal draft | 90s |
 | 3. Assembly | Anthropic | `claude-sonnet-4-5-20250929` | Final polished letter | 90s |
-| 4. Vetting | Anthropic | `claude-sonnet-4-6-20250514` | Jurisdiction accuracy, anti-hallucination | 120s |
+| 4. Vetting | Anthropic | `claude-sonnet-4-6` | Jurisdiction accuracy, anti-hallucination | 120s |
 
 ### 11.2 Stage 1 Failover Chain
 If OpenAI research fails: Perplexity `sonar-pro` → OpenAI stored prompt → Groq Llama 3.3 70B → **synthetic fallback**. Synthetic fallback sets `researchUnverified = true`.

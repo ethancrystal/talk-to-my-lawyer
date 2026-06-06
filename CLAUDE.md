@@ -79,7 +79,7 @@ Before making any changes, check:
 - Letters router is modularized via `server/routers/letters/index.ts` and composed from `server/routers/letters/{submit,subscriber,client-approval}.ts`. The same per-feature subdirectory pattern applies to `server/routers/review/`, `server/routers/affiliate/`, and `server/routers/billing/`.
 - Flat top-level routers — `server/routers/{auth,blog,documents,intakeFormTemplates,notifications,profile,templates,versions}.ts` — stay as single files. They are intentionally not modularized: don't split them into `*/index.ts` subdirectories unless one grows to a comparable size to `admin/` or `letters/`.
 - Pipeline stages live in subdirectories: `server/pipeline/{research,vetting,orchestration,graph,prompts}/`. `VettingResult` is exported from `server/pipeline/vetting/index.ts` (not `shared/types`). Pipeline routing between the simple path, LangGraph (`graph/`), and `fallback.ts` happens in `server/pipeline/routing.ts`.
-- **LangGraph LLM calls go through `callLlmWithFailover()` in `server/pipeline/graph/nodes/llm-failover.ts`** — every stage (research / draft / assembly / vetting) uses the same helper. Don't instantiate `ChatOpenAI` / `ChatAnthropic` directly in a new node. The helper picks model by `tier: "primary" | "lite"` and honors a per-call `anthropicModel` override for stage-canonical models on fallback (Stage 3 Assembly → `claude-sonnet-4-5-20250929`, Stage 4 Vetting → `claude-sonnet-4-6-20250514`).
+- **LangGraph LLM calls go through `callLlmWithFailover()` in `server/pipeline/graph/nodes/llm-failover.ts`** — every stage (research / draft / assembly / vetting) uses the same helper. Don't instantiate `ChatOpenAI` / `ChatAnthropic` directly in a new node. The helper picks model by `tier: "primary" | "lite"` and honors a per-call `anthropicModel` override for stage-canonical models on fallback (Stage 3 Assembly → `claude-sonnet-4-5-20250929`, Stage 4 Vetting → `claude-sonnet-4-6`).
 - DB layer: every router imports data-access functions from `server/db/<feature>.ts` (e.g. `letter-versions.ts`, `review-actions.ts`, `pipeline-records.ts`, `letters/`). Do not write raw Drizzle in routers.
 - Avoid reintroducing monolithic route/page files unless explicitly requested.
 - **Before splitting a `*.ts` file into a `*/index.ts` subdirectory, read the Module Move Checklist in [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) §1.14** — every relative import inside the moved file shifts one level deeper, and tests that source-grep the old path break silently.
@@ -194,7 +194,7 @@ Stage configuration (verified against `server/pipeline/graph/nodes/`):
 | Research | lite | 0 | (tier default) |
 | Draft | primary (default) | 0.5 | (tier default) |
 | Assembly | primary (default) | 0.3 | `claude-sonnet-4-5-20250929` |
-| Vetting | lite | 0 | `claude-sonnet-4-6-20250514` |
+| Vetting | lite | 0 | `claude-sonnet-4-6` |
 
 ---
 

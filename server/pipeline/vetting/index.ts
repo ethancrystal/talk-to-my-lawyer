@@ -291,7 +291,7 @@ export async function runVettingStage(
         },
         async () => {
           vettingProvider = "anthropic-failover";
-          vettingModelKey = "claude-sonnet-4-6-20250514";
+          vettingModelKey = "claude-sonnet-4-6";
           const r = await generateText({
             model: getVettingModelFallback(),
             system: systemPrompt,
@@ -347,7 +347,7 @@ export async function runVettingStage(
         },
         () => {
           vettingProvider = "anthropic-failover";
-          vettingModelKey = "claude-sonnet-4-6-20250514";
+          vettingModelKey = "claude-sonnet-4-6";
           return generateText({
             model: getVettingModelFallback(),
             system: systemPrompt,
