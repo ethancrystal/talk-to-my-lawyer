@@ -55,7 +55,7 @@ vi.mock("./providers", () => ({
   getAssemblyModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
   getAssemblyModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-5-20250929" })),
   getVettingModel: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
-  getVettingModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-6-20250514" })),
+  getVettingModelFallback: vi.fn(() => ({ provider: "anthropic-fallback", model: "claude-sonnet-4-6" })),
   createTokenAccumulator: vi.fn(() => ({ inputTokens: 0, outputTokens: 0 })),
   accumulateTokens: vi.fn(),
   calculateCost: vi.fn(() => "0.00"),

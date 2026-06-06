@@ -271,7 +271,7 @@ ${researchSummary}`;
     // convention — sonnet-4-6 distinct from assembly's sonnet-4-5. The lite-tier
     // default (claude-haiku-4-5) is too small for the quality-attorney persona;
     // when OpenAI is unavailable we want the more capable Sonnet here.
-    anthropicModel: "claude-sonnet-4-6-20250514",
+    anthropicModel: "claude-sonnet-4-6",
   });
 
   const rawContent = result.content;

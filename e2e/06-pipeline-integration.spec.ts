@@ -8,7 +8,7 @@ test.describe("E2E Pipeline Integration Test", () => {
   });
 
   test("runs the AI pipeline after successful intake form submission", async ({ subscriberPage: page }) => {
-    test.setTimeout(120000); // Pipeline can take a while
+    test.setTimeout(300000); // Full LangGraph run can include a quality retry.
 
     // 1. Submit the Letter via UI
     await page.goto("/submit");
@@ -58,11 +58,10 @@ test.describe("E2E Pipeline Integration Test", () => {
     await expect(submitButton).toBeVisible({ timeout: 5000 });
     await submitButton.click();
 
-    // The app should redirect to dashboard/status page after submission
-    await page.waitForURL(
-      (url) => url.pathname.includes("/dashboard") || url.pathname.includes("/letters/"),
-      { timeout: 30000 }
-    );
+    // Submission intentionally stays on /submit and opens a progress modal.
+    await expect(
+      page.getByRole("heading", { name: /preparing your letter/i })
+    ).toBeVisible({ timeout: 30000 });
 
     // To verify in DB, create a Postgres connection
     expect(process.env.DATABASE_URL, "DATABASE_URL environment variable must be provided").toBeDefined();
@@ -70,11 +69,11 @@ test.describe("E2E Pipeline Integration Test", () => {
     const sql = postgres(process.env.DATABASE_URL!);
 
     try {
-      // 2. Poll DB to check if intakeJson saved AND if pipeline transitioned it
+      // 2. Poll DB until the pipeline persists a completed AI draft.
       let foundRecord: any;
-      let isProcessing = false;
+      let foundVersion: any;
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 80; i++) {
         await page.waitForTimeout(3000);
 
         const records = await sql`
@@ -86,10 +85,21 @@ test.describe("E2E Pipeline Integration Test", () => {
 
         if (records.length > 0) {
           foundRecord = records[0];
+          const versions = await sql`
+            SELECT id, version_type, content
+            FROM letter_versions
+            WHERE letter_request_id = ${foundRecord.id}
+              AND version_type = 'ai_draft'
+            ORDER BY created_at DESC
+            LIMIT 1;
+          `;
 
-          // Check if the pipeline has started processing (or at least submitted)
-          if (["submitted", "researching", "drafting", "generated_locked", "needs_changes", "rejected", "approved"].includes(foundRecord.status)) {
-            isProcessing = true;
+          if (
+            foundRecord.status === "ai_generation_completed_hidden" &&
+            versions.length > 0 &&
+            versions[0].content?.length > 0
+          ) {
+            foundVersion = versions[0];
             break;
           }
         }
@@ -98,7 +108,10 @@ test.describe("E2E Pipeline Integration Test", () => {
       // Assertions
       expect(foundRecord).toBeDefined();
       expect(foundRecord.intake_json).toBeTruthy();
-      expect(isProcessing).toBe(true);
+      expect(foundRecord.status).toBe("ai_generation_completed_hidden");
+      expect(foundVersion).toBeDefined();
+      expect(foundVersion.version_type).toBe("ai_draft");
+      expect(foundVersion.content.length).toBeGreaterThan(0);
 
     } finally {
       await sql.end();

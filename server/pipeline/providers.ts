@@ -264,7 +264,7 @@ export function getVettingModel() {
  */
 export function getVettingModelFallback() {
   const anthropic = getAnthropicClient();
-  return anthropic("claude-sonnet-4-6-20250514");
+  return anthropic("claude-sonnet-4-6");
 }
 
 // ── Groq — free OSS last-resort fallback for all stages ──

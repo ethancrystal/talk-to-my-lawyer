@@ -25,7 +25,7 @@
 | Auth                   | Supabase Auth (JWT via `sb_session` httpOnly cookie), Row-Level Security                 |
 | AI - Research          | OpenAI `gpt-4o-search-preview` (web search); Perplexity `sonar-pro` optional failover    |
 | AI - Drafting/Assembly | Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`)                               |
-| AI - Vetting           | Anthropic Claude Sonnet 4.6 (`claude-sonnet-4-6-20250514`)                               |
+| AI - Vetting           | Anthropic Claude Sonnet 4.6 (`claude-sonnet-4-6`)                                        |
 | AI - Doc Analysis      | OpenAI GPT-4o                                                                            |
 | Payments               | Stripe (Monthly $299, Yearly $2,400; single-letter $299 is deprecated)                   |
 | Email                  | Resend transactional email templates                                                     |
@@ -268,7 +268,7 @@ The standard pipeline is defined in `server/pipeline/orchestrator.ts`, with modu
 | 1 - Research | OpenAI `gpt-4o-search-preview`                   | Web-grounded legal research with web search       | `ResearchPacket`      |
 | 2 - Drafting | Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`) | Initial letter draft from research + intake       | `DraftOutput`         |
 | 3 - Assembly | Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`) | Polish into formal legal letter format            | Assembled letter text |
-| 4 - Vetting  | Claude Sonnet 4.6 (`claude-sonnet-4-6-20250514`) | Anti-hallucination, citation check, bloat removal | Vetted letter text    |
+| 4 - Vetting  | Claude Sonnet 4.6 (`claude-sonnet-4-6`)          | Anti-hallucination, citation check, bloat removal | Vetted letter text    |
 
 - **RAG/Recursive Learning:** Attorney-approved letters are embedded with OpenAI `text-embedding-3-small` and used as reference examples in Stage 2 drafting.
 - **Research failover chain:** OpenAI `gpt-4o-search-preview` -> Perplexity `sonar-pro` (if key set) -> OpenAI stored prompt -> Groq Llama 3.3 70B -> synthetic fallback.
