@@ -229,6 +229,11 @@ describe("LangGraph in-process run — checkpoint persistence", () => {
       letterId,
       userId: 7,
       intake: testIntake(),
+      // Pin a STABLE thread id so this test can read the checkpoint back by a
+      // known key. Production defaults to a FRESH per-invocation id
+      // (`letter_<id>_<timestamp>`) to avoid resuming a stale checkpoint, so a
+      // test that assumed the old stable `letter_<id>` would read undefined.
+      threadId: `letter_${letterId}`,
     });
 
     // The run completed (not failed).
@@ -237,7 +242,7 @@ describe("LangGraph in-process run — checkpoint persistence", () => {
     const saver = h.saver!;
     expect(saver).toBeInstanceOf(MemorySaver);
 
-    // The thread_id convention is `letter_<id>` (see runLangGraphPipeline).
+    // We pinned threadId above, so the checkpoint lives at this stable key.
     const threadConfig = { configurable: { thread_id: `letter_${letterId}` } };
 
     // A checkpoint "row" landed for this thread.
@@ -270,7 +275,13 @@ describe("LangGraph in-process run — checkpoint persistence", () => {
   it("persists the same finalized body to the ai_draft version that the checkpoint holds", async () => {
     const letterId = 9002;
 
-    await runLangGraphPipeline({ letterId, userId: 7, intake: testIntake() });
+    // Pin a stable thread id so the checkpoint is readable by key below.
+    await runLangGraphPipeline({
+      letterId,
+      userId: 7,
+      intake: testIntake(),
+      threadId: `letter_${letterId}`,
+    });
 
     // finalize wrote exactly one ai_draft version row.
     expect(h.inserts).toHaveLength(1);

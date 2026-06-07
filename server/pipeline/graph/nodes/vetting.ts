@@ -45,8 +45,10 @@ export interface DeterministicVettingResult {
 // State legal abbreviations as they appear in statutory citations (Bluebook-ish),
 // mapping abbrev → full state name. Covers all 50 states so the deterministic
 // gate is not silently blind to e.g. "Ariz. Rev. Stat." or "Nev. Rev. Stat.".
-// Short/ambiguous tokens (Or., Me., La.) are safe because they are only matched
-// inside a STATUTORY context (see detectForeignStateStatutes), never bare prose.
+// Short/ambiguous tokens (Or., Me., La.) are safe because the abbrev path
+// requires the capitalized citation form directly followed by a statutory tail
+// (see detectForeignStateStatutes), so the lowercase conjunction "or." and bare
+// prose are never matched.
 const STATE_LEGAL_ABBREV: Record<string, string> = {
   "ala.": "Alabama", "alaska": "Alaska", "ariz.": "Arizona", "ark.": "Arkansas",
   "cal.": "California", "calif.": "California", "colo.": "Colorado", "conn.": "Connecticut",
@@ -63,13 +65,42 @@ const STATE_LEGAL_ABBREV: Record<string, string> = {
   "w. va.": "West Virginia", "wis.": "Wisconsin", "wyo.": "Wyoming",
 };
 
-// A "statutory marker" signals an actual statute/code citation (NOT a case
-// name). Requiring one before attributing a state keeps the gate precise: it
-// fires on "Ariz. Rev. Stat. § 33-1321" but NOT on a federal case whose party
-// is a state ("Texas v. Johnson", "New York Times Co. v. Sullivan") or a bare
-// out-of-state party/address mention.
-const STATUTE_MARKER_RE =
-  /(§\s*\d|\bRev\.\s*Stat\b|\bRevised Statutes\b|\bComp\.\s*Laws\b|\bCompiled Laws\b|\bGen\.\s*(?:Stat|Laws)\b|\bGeneral (?:Statutes|Laws)\b|\b[A-Z][a-z]+ Code\b|\bCode Ann\b|\bStat(?:utes?|\.)\s*Ann\b)/g;
+// A "statutory tail" is the code/statute keyword that turns a state token into
+// an actual citation — the "Code" in "Texas Property Code", the "Rev. Stat." in
+// "Ariz. Rev. Stat.", the "Statutes" in "Florida Statutes", or a bare "§".
+// Matched case-sensitively in the Title-case form real citations use, so a
+// lowercase prose word ("the texas statute requires …") is never a tail.
+const STATUTE_TAIL_SRC = String.raw`(?:§|Code(?:\s+Ann\.?)?|Statutes?|Stat\.\s*Ann\.?|(?:Rev\.?|Revised|Comp\.?|Compiled|Gen\.?|General)\s+(?:Stat(?:s?\.|utes)?|Laws?|Code))`;
+
+// Between the state token and the statutory tail we allow only a SHORT run of
+// citation-style tokens (Title-case words / abbreviations like "Civ.", "Rev.",
+// "Gen. Bus."). Lowercase prose words and punctuation are NOT allowed, so a
+// sentence like "100 Washington Ave, under Cal. Civ. Code" never connects
+// "Washington" to "Code" — the run breaks at the comma after "Ave".
+const CITE_SUBJECT_SRC = String.raw`(?:[A-Z][A-Za-z]*\.?\s+){0,3}`;
+
+/**
+ * Build a regex source matching a state legal abbreviation in citation form.
+ * The FIRST letter is forced uppercase (real citations write "Or.", "Ariz.",
+ * "N.Y."), so the lowercase conjunction "or." is never read as Oregon; the
+ * remaining letters match case-insensitively so the "n.y." key still matches
+ * the cited "N.Y.".
+ */
+function abbrevCitationSrc(abbr: string): string {
+  let out = "";
+  let firstAlpha = true;
+  for (const ch of abbr) {
+    if (/[a-z]/i.test(ch)) {
+      out += firstAlpha ? ch.toUpperCase() : `[${ch.toLowerCase()}${ch.toUpperCase()}]`;
+      firstAlpha = false;
+    } else if (ch === " ") {
+      out += String.raw`\s+`;
+    } else {
+      out += escapeRegExp(ch);
+    }
+  }
+  return out;
+}
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -85,41 +116,51 @@ function resolveStateName(raw: string | null | undefined): string | null {
   return full ?? null;
 }
 
-/** Find a foreign US state named within `window` (full name or legal abbrev). */
-function foreignStateInWindow(window: string, jurName: string | null): string | null {
-  // Abbrevs first (more specific). Require a non-letter boundary before the
-  // abbrev so "or." matches but "fork." does not.
-  for (const [abbr, name] of Object.entries(STATE_LEGAL_ABBREV)) {
-    if (jurName && name.toLowerCase() === jurName.toLowerCase()) continue;
-    if (new RegExp(`(?:^|[^A-Za-z])${escapeRegExp(abbr)}`, "i").test(window)) return name;
-  }
-  for (const name of US_STATE_NAMES) {
-    if (jurName && name.toLowerCase() === jurName.toLowerCase()) continue;
-    if (new RegExp(`\\b${name}\\b`, "i").test(window)) return name;
-  }
-  return null;
-}
-
 /**
- * Detect foreign-state STATUTORY citations in the letter. For each statutory
- * marker (§ N, "Rev. Stat.", "<X> Code", …) we inspect the ~45 chars leading up
- * to it for a state token. Precise on two axes:
- *   - only fires on statutory authority (a marker is required), so federal case
- *     names with state parties ("Texas v. Johnson") are NOT flagged; and
- *   - only fires when the state token sits in the citation's lead-in, so an
- *     out-of-state party/address mentioned elsewhere is NOT flagged.
+ * Detect foreign-state STATUTORY citations in the letter. A state is flagged
+ * only when it is the LEAD of an actual citation — the state name/abbrev
+ * directly followed (allowing a short Title-case subject run) by a statutory
+ * tail ("Code", "Rev. Stat.", "Statutes", "§", …). This is precise on the
+ * cases that previously false-positived:
+ *   - "Texas v. Johnson" / "New York Times" → the token after the state is not
+ *     citation text leading to a statute keyword, so NOT flagged;
+ *   - "100 Washington Ave, …" / "Dear Georgia Thompson, …" → the run breaks at
+ *     the comma / lowercase word before any keyword, so NOT flagged;
+ *   - "remit by check or. Cal. Civ. Code" → the conjunction "or." is lowercase
+ *     and the abbrev path requires the citation-form uppercase "Or.", so NOT
+ *     flagged.
+ * It still fires on real citations: "Texas Property Code § 92.109",
+ * "Ariz. Rev. Stat. § 33-1321", "Florida Statutes § 83.49", "Ohio Revised
+ * Code", etc.
  */
 function detectForeignStateStatutes(text: string, jurName: string | null): string[] {
   const found = new Set<string>();
-  STATUTE_MARKER_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = STATUTE_MARKER_RE.exec(text)) !== null) {
-    const start = Math.max(0, m.index - 45);
-    const window = text.slice(start, m.index + m[0].length);
-    const fs = foreignStateInWindow(window, jurName);
-    if (fs) found.add(fs);
-    if (STATUTE_MARKER_RE.lastIndex === m.index) STATUTE_MARKER_RE.lastIndex++;
+  const jl = (jurName ?? "").toLowerCase();
+
+  // Full state names (Title-case, as written in citations) leading a citation.
+  for (const name of US_STATE_NAMES) {
+    if (name.toLowerCase() === jl) continue;
+    if (
+      new RegExp(String.raw`\b${escapeRegExp(name)}\s+${CITE_SUBJECT_SRC}${STATUTE_TAIL_SRC}`).test(
+        text,
+      )
+    ) {
+      found.add(name);
+    }
   }
+
+  // Legal abbreviations ("Cal.", "Ariz.", "N.Y.", "Or.") leading a citation.
+  for (const [abbr, name] of Object.entries(STATE_LEGAL_ABBREV)) {
+    if (name.toLowerCase() === jl) continue;
+    if (
+      new RegExp(
+        String.raw`(?:^|[^A-Za-z])${abbrevCitationSrc(abbr)}\s+${CITE_SUBJECT_SRC}${STATUTE_TAIL_SRC}`,
+      ).test(text)
+    ) {
+      found.add(name);
+    }
+  }
+
   return Array.from(found);
 }
 
