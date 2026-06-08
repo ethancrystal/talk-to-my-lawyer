@@ -168,3 +168,16 @@ Agent: check this file before writing to avoid duplicate topics.
 - Construction Cost Overruns in California: When You Must Pay More Than the Estimate — and When You Don't (LONG)
 - California's Right to Repair Act (SB 800): How Homeowners Must Handle Construction Defects Before Suing (LONG)
 - Home Improvement Contracts in California: The Legal Rules Every Homeowner and Contractor Should Know (2026) (LONG)
+
+
+## 2026-06-07 — Demand Letters / Process / SOL
+- Sent a Demand Letter, No Response — What Now? California Options (SHORT)
+- Does a Demand Letter Need to Be Notarized in California? (SHORT)
+- Certified Mail, Email, or Text: How Should You Send a Demand Letter in California? (SHORT)
+- How Long Does the Other Side Have to Respond to a Demand Letter in California? (SHORT)
+- How Long Do You Have to Sue Someone in California? Statute of Limitations Basics (SHORT)
+- How Long Does a Demand Letter Take to Work in California? (LONG)
+- 5 Types of Demand Letters Every California Business Should Know (2026) (LONG)
+- Owed More Than $12,500? Your Options When a California Dispute Exceeds the Small Claims Limit (LONG)
+- They Responded to Your Demand Letter — How to Negotiate and Close the Settlement in California (LONG)
+- How Long Do You Have to Sue in California? Statutes of Limitations for Every Common Dispute (2026 Guide) (LONG)
