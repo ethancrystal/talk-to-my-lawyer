@@ -15,6 +15,14 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Eye,
   EyeOff,
   Loader2,
@@ -93,6 +101,9 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Terms of Service agreement modal — opened on submit; the account is only
+  // created after the user explicitly agrees.
+  const [showTerms, setShowTerms] = useState(false);
   // Detect hash tokens at mount — if present, the finalize useEffect handles
   // the OAuth completion and we must not show any URL-param error.
   const hashHasTokens = typeof window !== "undefined" &&
@@ -159,7 +170,13 @@ export default function Signup() {
 
         // Clean the hash from the URL so tokens don't persist in browser history
         window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
-        await utils.auth.me.invalidate();
+        // Prime the auth cache before navigating so the first navigation lands
+        // authenticated instead of bouncing back (the "click twice" bug).
+        try {
+          await utils.auth.me.fetch(undefined, { staleTime: 0 });
+        } catch {
+          await utils.auth.me.invalidate();
+        }
         localStorage.removeItem("ttml_onboarding_seen");
         toast.success("Account created", {
           description: "Welcome to Talk to My Lawyer. Let's get started.",
@@ -184,7 +201,9 @@ export default function Signup() {
     match: password === confirmPassword && confirmPassword.length > 0,
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
+  // Validate the form, then open the Terms of Service agreement modal.
+  // The account is created only after the user explicitly agrees (performSignup).
+  const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -198,6 +217,12 @@ export default function Signup() {
       return;
     }
 
+    setShowTerms(true);
+  };
+
+  // Actually create the account — invoked from the Terms modal's "I Agree" CTA.
+  const performSignup = async () => {
+    setError(null);
     setLoading(true);
 
     try {
@@ -251,7 +276,14 @@ export default function Signup() {
         return;
       }
 
-      await utils.auth.me.invalidate();
+      // Prime the auth cache with the freshly-authenticated user BEFORE
+      // navigating, so ProtectedRoute sees the session on the first navigation
+      // instead of bouncing back to /login (the "click twice" bug).
+      try {
+        await utils.auth.me.fetch(undefined, { staleTime: 0 });
+      } catch {
+        await utils.auth.me.invalidate();
+      }
 
       toast.success("Account created", {
         description: "Welcome to Talk to My Lawyer. Let's get started.",
@@ -686,6 +718,106 @@ export default function Signup() {
           </Link>
         </p>
       </div>
+
+      {/* Terms of Service agreement modal — gates account creation */}
+      <Dialog open={showTerms} onOpenChange={setShowTerms}>
+        <DialogContent className="sm:max-w-lg" data-testid="modal-terms">
+          <DialogHeader>
+            <DialogTitle>Terms of Service &amp; Privacy</DialogTitle>
+            <DialogDescription>
+              Please review and accept to create your{" "}
+              {role === "affiliate" ? "affiliate" : "client"} account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 pr-3 text-sm text-slate-600 space-y-3">
+            <p>
+              <strong className="text-slate-800">1. Service.</strong> Talk-To-My-Lawyer
+              provides AI-assisted legal letter drafts that are reviewed by a licensed
+              attorney before delivery. We help you prepare correspondence; we are not a
+              substitute for in-person legal representation.
+            </p>
+            <p>
+              <strong className="text-slate-800">2. Not legal advice until reviewed.</strong>{" "}
+              AI-generated drafts are not legal advice. Only an attorney-reviewed and
+              approved letter reflects professional review, and no attorney–client
+              relationship is formed until a letter is accepted for review.
+            </p>
+            <p>
+              <strong className="text-slate-800">3. Your responsibilities.</strong> You agree
+              to provide accurate information and to use the service lawfully. You are
+              responsible for the facts you submit and for how any delivered letter is used.
+            </p>
+            <p>
+              <strong className="text-slate-800">4. Payments.</strong> Subscription and
+              per-letter fees are billed as shown at checkout. Fees are non-refundable once
+              attorney review has begun, except where required by law.
+            </p>
+            <p>
+              <strong className="text-slate-800">5. Privacy.</strong> We process the
+              information you submit solely to draft, review, and deliver your letter, in
+              accordance with our Privacy Policy. We do not sell your personal information.
+            </p>
+            <p>
+              <strong className="text-slate-800">6. Confidentiality.</strong> Letter contents
+              are kept confidential and are accessible only to you, the reviewing attorney,
+              and authorized staff.
+            </p>
+            <p className="text-slate-500">
+              By selecting “I Agree” you confirm you have read and accept the full{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-slate-700"
+              >
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-slate-700"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowTerms(false)}
+              disabled={loading}
+              data-testid="button-terms-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-indigo-600 hover:bg-indigo-700"
+              disabled={loading}
+              onClick={() => {
+                setShowTerms(false);
+                void performSignup();
+              }}
+              data-testid="button-terms-agree"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                "I Agree & Create Account"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
