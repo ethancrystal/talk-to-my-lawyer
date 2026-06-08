@@ -83,12 +83,17 @@ function normalizeStep(status: string, currentStep?: string): string {
   ) {
     return "completed";
   }
+  // Terminal failure: surface the stage it died at if known, else a generic
+  // "failed" marker so getStageStatus can render an errored circle.
+  if (status === "pipeline_failed") {
+    return currentStep && currentStep !== "pending" ? currentStep : "failed";
+  }
   return currentStep || status || "pending";
 }
 
 function getStageStatus(currentStep: string, pipelineStatus: string, stageKey: string): StageStatus {
   if (pipelineStatus === "completed") return "completed";
-  if (pipelineStatus === "failed") {
+  if (pipelineStatus === "failed" || pipelineStatus === "pipeline_failed") {
     return stageKey === currentStep || (currentStep === "failed" && stageKey === "completed")
       ? "error"
       : "pending";
@@ -192,7 +197,12 @@ export default function PipelineProgressModal({
   }, [open, letterId]);
 
   const currentStatus = data?.letter?.status ?? "submitted";
-  const pipelineStatus = pipelineRecord?.status ?? currentStatus;
+  // A terminal letter-level failure is authoritative — it must win over a stale
+  // pipeline_record that never advanced past "pending" (e.g. a startup force-fail).
+  const pipelineStatus =
+    currentStatus === "pipeline_failed"
+      ? "failed"
+      : pipelineRecord?.status ?? currentStatus;
   const currentStep = normalizeStep(currentStatus, pipelineRecord?.current_step);
   const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
   const isReleasedToSubscriber = currentStatus === "letter_released_to_subscriber";

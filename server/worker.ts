@@ -33,7 +33,6 @@ import {
 } from "./pipeline/routing";
 import {
   getGraphWithCheckpointer,
-  runLangGraphPipeline,
 } from "./pipeline/graph";
 import type { PipelineStateType } from "./pipeline/graph/state";
 import {
@@ -218,6 +217,15 @@ export async function processRunPipeline(
   if (!apiCheck.ok) {
     const msg = `[Worker] API key preflight failed for letter #${letterId}: ${apiCheck.missing.join("; ")}`;
     logger.error(msg);
+    // Write a real failed pipeline_record so the subscriber's progress modal
+    // (and admin monitor) reflect the failure instead of a frozen "pending".
+    await updatePipelineRecord(letterId, {
+      status: "failed",
+      currentStep: "failed",
+      progress: 100,
+      errorMessage: apiCheck.missing.join("; "),
+      completedAt: new Date(),
+    }).catch(() => {});
     try {
       await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
     } catch {
@@ -421,18 +429,12 @@ export async function processRunPipeline(
       );
       await markPriorPipelineRunsSuperseded(letterId);
       try {
-        await runLangGraphPipeline({
-          letterId,
-          userId,
-          intake: intake as Record<string, any>,
-          isFreePreview: isPreviewGatedSubmission,
-          // Fresh checkpoint thread per invocation: we just superseded prior
-          // runs, so this is a clean start. A stable `letter_${id}` thread would
-          // make a durable PostgresSaver RESUME a stale prior checkpoint and
-          // could finalize an old draft. finalizeNode is idempotent, so a
-          // re-run after a crash safely no-ops if the letter already finalized.
-          threadId: `letter_${letterId}_${Date.now()}`,
-        });
+        // Use the queued/streaming runner (not runLangGraphPipeline) so the
+        // pipeline writes per-stage pipeline_records updates that drive the
+        // subscriber's live progress modal. Both share the same graph, the same
+        // fresh-thread-per-invocation strategy, and the idempotent finalizeNode;
+        // this one additionally streams progress so the timeline actually moves.
+        await runQueuedLangGraphPipeline(data, isPreviewGatedSubmission);
         logger.info(`[Worker] Paid subscriber LangGraph pipeline completed for letter #${letterId}`);
         return;
       } catch (err) {
