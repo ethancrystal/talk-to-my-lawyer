@@ -118,7 +118,13 @@ export default function Login() {
           document.title,
           `${window.location.pathname}${window.location.search}`
         );
-        await utils.auth.me.invalidate();
+        // Prime the auth cache before navigating so the first navigation lands
+        // authenticated (see handleLogin for the full "click twice" rationale).
+        try {
+          await utils.auth.me.fetch(undefined, { staleTime: 0 });
+        } catch {
+          await utils.auth.me.invalidate();
+        }
 
         if (data.requires2FA) {
           if (data.emailFailed) {
@@ -224,7 +230,16 @@ export default function Login() {
         return;
       }
 
-      await utils.auth.me.invalidate();
+      // Prime the auth cache with the freshly-authenticated user BEFORE
+      // navigating. invalidate() alone doesn't refetch the inactive auth.me
+      // query, so the first navigation hit a guarded route with a stale
+      // user=null and bounced back to /login (the "click twice" bug). Awaiting
+      // a fresh fetch guarantees ProtectedRoute sees the session immediately.
+      try {
+        await utils.auth.me.fetch(undefined, { staleTime: 0 });
+      } catch {
+        await utils.auth.me.invalidate();
+      }
 
       const role =
         data.user?.role ??
