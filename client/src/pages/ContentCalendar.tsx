@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Link } from "wouter";
-import { Calendar, Target, LinkIcon, ArrowRight, FileText, Megaphone, Mail, Twitter, Linkedin } from "lucide-react";
+import { Calendar, Target, LinkIcon, ArrowRight, FileText, Megaphone, Mail } from "lucide-react";
+import { LinkedinIcon, XIcon } from "@/components/icons/brand-icons";
 import Footer from "@/components/shared/Footer";
 import PublicNav from "@/components/shared/PublicNav";
 import PublicBreadcrumb from "@/components/shared/PublicBreadcrumb";
@@ -341,13 +342,13 @@ export default function ContentCalendar() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="bg-blue-50 rounded-lg p-3">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 mb-1.5">
-                            <Linkedin className="w-3 h-3" /> LinkedIn
+                            <LinkedinIcon className="w-3 h-3" /> LinkedIn
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">{post.repurpose.linkedin}</p>
                         </div>
                         <div className="bg-slate-50 rounded-lg p-3">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mb-1.5">
-                            <Twitter className="w-3 h-3" /> X / Twitter
+                            <XIcon className="w-3 h-3" /> X / Twitter
                           </div>
                           <p className="text-xs text-slate-600 leading-relaxed">{post.repurpose.twitter}</p>
                         </div>
