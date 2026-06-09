@@ -67,7 +67,6 @@ Allow: /services
 Allow: /services/
 Allow: /services/*
 Allow: /pricing
-Allow: /analyze
 Allow: /faq
 Allow: /terms
 Allow: /privacy
