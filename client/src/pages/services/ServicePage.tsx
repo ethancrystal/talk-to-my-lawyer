@@ -21,7 +21,7 @@ import type { ServiceData } from "./serviceData";
 
 export default function ServicePage({ service }: { service: ServiceData }) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const goToSignup = () => { window.location.href = "/signupup"; };
+  const goToSignup = () => { window.location.href = "/signup"; };
 
   const jsonLd = [
     {

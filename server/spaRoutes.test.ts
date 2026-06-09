@@ -65,7 +65,7 @@ describe("crawler-facing static files", () => {
       "[Pricing](https://www.talk-to-my-lawyer.com/pricing)"
     );
     expect(llms).toContain(
-      "[Demand letter](https://www.talk-to-my-lawyer.com/services/demand-letter)"
+      "[Demand Letter](https://www.talk-to-my-lawyer.com/services/demand-letter)"
     );
   });
 
