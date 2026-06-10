@@ -169,6 +169,42 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).not.toContain("Generic description");
   });
 
+  it("collapses duplicate managed head tags from a prerendered DOM into one set", async () => {
+    // Mimics what puppeteer captures: react-helmet-async layers its per-route
+    // title/description on top of the static tags from index.html, so the
+    // prerendered HTML arrives with TWO titles and TWO descriptions (one of
+    // them spanning multiple lines, as index.html formats them).
+    const prerendered = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>
+      Attorney-Drafted Legal Letters - Demand Letters &amp; Cease and Desist |
+      Talk to My Lawyer
+    </title>
+    <meta name="description" content="Generic homepage description" />
+    <title data-rh="true">Legal Letter Pricing - Single, Monthly &amp; Yearly Plans | Talk to My Lawyer</title>
+    <meta data-rh="true" name="description" content="Helmet-injected pricing description" />
+  </head>
+  <body><div id="root"><h1>Pricing</h1></div></body>
+</html>`;
+    const route = await resolveSpaRoute("/pricing");
+    const html = injectSeoIntoHtml(prerendered, route);
+
+    // Exactly one title and one description survive.
+    expect(html.match(/<title>/g)?.length ?? 0).toBe(1);
+    expect(html.match(/<meta\s+name="description"/g)?.length ?? 0).toBe(1);
+    // The surviving tags are the authoritative RouteSeo values, not the
+    // stale generic homepage copy.
+    expect(html).toContain(
+      "<title>Legal Letter Pricing - Single, Monthly &amp; Yearly Plans | Talk to My Lawyer</title>"
+    );
+    expect(html).not.toContain("Generic homepage description");
+    expect(html).not.toContain("Attorney-Drafted Legal Letters - Demand Letters");
+    // Prerendered body content is preserved.
+    expect(html).toContain("<h1>Pricing</h1>");
+  });
+
   it("uses published blog post metadata when the slug exists", async () => {
     const route = await resolveSpaRoute("/blog/test-post", {
       getBlogPost: async slug => ({

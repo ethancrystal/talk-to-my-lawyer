@@ -117,11 +117,38 @@ export function serveStatic(app: Express) {
   const prerenderDir = path.resolve(distPath, "..", "_prerender");
   let prerenderCache = new Map<string, string>();
   loadPrerenderCache(prerenderDir)
-    .then((cache) => {
-      prerenderCache = cache;
-      if (cache.size > 0) {
+    .then(async (cache) => {
+      // Puppeteer captures the post-hydration DOM, where react-helmet-async
+      // has layered its per-route <title>/<meta> on top of the static tags
+      // already present in index.html — so the raw prerendered HTML ships
+      // DUPLICATE managed head tags (two titles, two descriptions, etc.).
+      // Normalize each entry through injectSeoIntoHtml so the served HTML
+      // carries exactly one authoritative set of SEO tags from RouteSeo,
+      // identical to the non-prerendered fall-through path below. The
+      // rendered <body> is untouched (the empty-root fallback branch only
+      // fires on an empty <div id="root">, which a prerendered page never has).
+      const normalized = new Map<string, string>();
+      for (const [pathname, html] of Array.from(cache.entries())) {
+        try {
+          const route = await resolveSpaRoute(pathname, {
+            getBlogPost: getCachedBlogPost,
+            getBlogPosts: () => getCachedBlogPosts({ limit: 12 }),
+          });
+          normalized.set(pathname, injectSeoIntoHtml(html, route));
+        } catch (err) {
+          // Fall back to the raw prerendered HTML rather than dropping the
+          // route — a stale-but-rendered page still beats a 200 SPA shell.
+          logger.warn(
+            { err, pathname },
+            "[prerender] Failed to normalize SEO tags; serving raw prerender"
+          );
+          normalized.set(pathname, html);
+        }
+      }
+      prerenderCache = normalized;
+      if (normalized.size > 0) {
         logger.info(
-          `[prerender] Loaded ${cache.size} prerendered routes from ${prerenderDir}`
+          `[prerender] Loaded ${normalized.size} prerendered routes from ${prerenderDir}`
         );
       }
     })

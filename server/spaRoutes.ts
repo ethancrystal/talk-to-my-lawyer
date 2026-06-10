@@ -764,7 +764,7 @@ function escapeHtmlAttribute(value: string): string {
 
 function stripManagedHeadTags(html: string): string {
   return html
-    .replace(/<title>[\s\S]*?<\/title>\s*/i, "")
+    .replace(/<title>[\s\S]*?<\/title>\s*/gi, "")
     .replace(/<meta\s+name=["']description["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+name=["']keywords["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+name=["']robots["'][^>]*>\s*/gi, "")
