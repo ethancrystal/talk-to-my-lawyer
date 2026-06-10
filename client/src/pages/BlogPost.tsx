@@ -197,6 +197,40 @@ function renderMarkdown(content: string): string {
       continue;
     }
 
+    // Table — collect consecutive | row | lines (header, separator, body)
+    if (/^\|.*\|\s*$/.test(raw)) {
+      const tableLines: string[] = [];
+      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      if (tableLines.length >= 3 && /^[\s|:-]+$/.test(tableLines[1])) {
+        const parseRow = (l: string) =>
+          l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+        const th = parseRow(tableLines[0])
+          .map((h) => `<th class="border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-[#0c2340]">${inlineFormat(escape(h))}</th>`)
+          .join("");
+        const trs = tableLines
+          .slice(2)
+          .map(
+            (r) =>
+              `<tr>${parseRow(r)
+                .map((c) => `<td class="border border-slate-200 px-3 py-2 text-sm text-slate-700">${inlineFormat(escape(c))}</td>`)
+                .join("")}</tr>`
+          )
+          .join("");
+        blocks.push(
+          `<div class="overflow-x-auto"><table class="w-full border-collapse my-6"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table></div>`
+        );
+      } else {
+        // Not a valid table — emit as paragraph so content isn't lost
+        blocks.push(
+          `<p class="text-slate-700 leading-relaxed mb-4">${tableLines.map((l) => inlineFormat(escape(l))).join(" ")}</p>`
+        );
+      }
+      continue;
+    }
+
     // Empty line → paragraph break (skip)
     if (raw.trim() === "") {
       i++;
@@ -379,8 +413,9 @@ export default function BlogPost() {
               keywords: CATEGORY_LABELS[post.category] ?? "legal",
               about: { "@type": "Thing", name: "Legal Letters" },
               reviewedBy: {
-                "@type": "Organization",
-                name: "Licensed California Attorneys",
+                "@type": "Person",
+                name: "Joel Farkas",
+                jobTitle: "Attorney",
               },
             })}
           </script>
@@ -465,7 +500,7 @@ export default function BlogPost() {
                       <div className="font-semibold text-slate-800 text-sm">
                         Talk to My Lawyer Legal Team
                       </div>
-                      <div className="text-xs text-slate-500">Reviewed by licensed attorneys</div>
+                      <div className="text-xs text-slate-500">Reviewed by Joel Farkas, Attorney</div>
                     </div>
                   </div>
                   <span className="flex items-center gap-1">
