@@ -102,6 +102,12 @@ Disallow: /forgot-password
 Disallow: /verify-email
 Disallow: /reset-password
 Disallow: /accept-invitation
+# Public blog content API — must stay crawlable or Googlebot's renderer
+# cannot load blog posts (CSR + blocked API = soft 404, page never indexed).
+# Longest-match rule: these Allow lines override the /api/ Disallow below.
+Allow: /api/trpc/blog.getBySlug
+Allow: /api/trpc/blog.list
+Allow: /api/trpc/blog
 Disallow: /api/
 Disallow: /auth/
 
