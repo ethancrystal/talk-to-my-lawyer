@@ -104,6 +104,12 @@ export default function BlogIndex() {
               <p className="text-lg text-slate-600 max-w-2xl mx-auto">
                 Expert insights on legal letters, dispute resolution, and protecting your rights — written in plain English.
               </p>
+              {!isLoading && total > 0 && (
+                <p className="mt-3 text-sm font-medium text-slate-400" data-testid="text-article-count">
+                  {total} {total === 1 ? "article" : "articles"}
+                  {category ? ` in ${CATEGORY_LABELS[category] ?? category}` : " published"}
+                </p>
+              )}
             </header>
 
             <div className="flex flex-wrap justify-center gap-2 mb-10">
@@ -190,7 +196,7 @@ export default function BlogIndex() {
                       Previous
                     </button>
                     <span className="px-4 py-2 text-sm text-slate-500">
-                      Page {page + 1} of {totalPages}
+                      Page {page + 1} of {totalPages} · {total} total
                     </span>
                     <button
                       onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
