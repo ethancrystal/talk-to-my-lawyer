@@ -920,6 +920,31 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              {/* Why a demand letter works — editorial note anchored to the Demand for Payment card */}
+              <div
+                className="mt-8 sm:mt-10 bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 border-l-4 border-l-blue-600"
+                data-testid="demand-letter-callout"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="hidden sm:flex w-11 h-11 rounded-xl bg-blue-50 items-center justify-center shrink-0">
+                    <Banknote className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 mb-2">
+                      Why a demand letter works
+                    </h3>
+                    <p className="text-base text-slate-600 leading-relaxed">
+                      A demand letter from a licensed California attorney
+                      carries legal weight that a strongly worded email simply
+                      doesn't. It signals that you are serious, that you have
+                      counsel, and that the next step is a court filing. For
+                      clients who are stalling but not outright refusing to
+                      pay, that signal alone is often enough to unlock payment.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
