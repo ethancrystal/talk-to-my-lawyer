@@ -105,9 +105,10 @@ export default function BlogIndex() {
                 Expert insights on legal letters, dispute resolution, and protecting your rights — written in plain English.
               </p>
               {!isLoading && total > 0 && (
-                <p className="mt-3 text-sm font-medium text-slate-400" data-testid="text-article-count">
-                  {total} {total === 1 ? "article" : "articles"}
-                  {category ? ` in ${CATEGORY_LABELS[category] ?? category}` : " published"}
+                <p className="mt-3 text-sm font-medium text-slate-500" data-testid="text-article-count">
+                  {category
+                    ? `${total} article${total === 1 ? "" : "s"} in ${CATEGORY_LABELS[category] ?? category}`
+                    : `${total} article${total === 1 ? "" : "s"} published`}
                 </p>
               )}
             </header>
