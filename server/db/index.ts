@@ -16,3 +16,4 @@ export * from "./analytics";
 export * from "./templates";
 export * from "./intake-form-templates";
 export * from "./document-analyses";
+export * from "./organizations";
