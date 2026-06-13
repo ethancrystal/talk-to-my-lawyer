@@ -345,7 +345,13 @@ export async function runLangGraphPipeline(
     configurable: { thread_id: checkpointThreadId },
   });
 
-  if (finalState.currentStage === "failed") {
+  // Success is signalled ONLY by finalizeNode returning currentStage="done".
+  // failNode returns "failed"; a node that throws on the terminal edge (e.g.
+  // finalizeNode itself) is swallowed by withErrorRecovery into "error" while
+  // the finalize→END edge still fires. Allow-list the success state so a
+  // finalize throw surfaces as an error to the caller (the langgraph.ts shim
+  // converts it to {success:false}) instead of being misreported as success.
+  if (finalState.currentStage !== "done") {
     const errCode = finalState.lastErrorCode ?? "UNKNOWN_ERROR";
     const errMsg = finalState.lastErrorMessage ?? "LangGraph pipeline failed";
     throw new Error(`[${errCode}] ${errMsg} (letter #${letterId})`);

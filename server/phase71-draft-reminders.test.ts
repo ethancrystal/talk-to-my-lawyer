@@ -52,9 +52,14 @@ describe("sendDraftReminderEmail — export and signature", () => {
 
 describe("draftReminders module — exports and configuration", () => {
   it("exports processDraftReminders as a function", async () => {
+    // This is the FIRST (cold) import of ./draftReminders, which pulls in the
+    // email + db + pipeline module graph. Under full-suite parallel load the
+    // cold transform/import can exceed a tight 15s budget on slower machines,
+    // so inherit the 30s global testTimeout (the sibling import below already
+    // relies on it). Not a logic concern — purely cold-import cost.
     const { processDraftReminders } = await import("./draftReminders");
     expect(typeof processDraftReminders).toBe("function");
-  }, 15000);
+  });
 
   it("exports registerDraftRemindersRoute as a function", async () => {
     const { registerDraftRemindersRoute } = await import("./draftReminders");

@@ -160,7 +160,17 @@ async function runQueuedLangGraphPipeline(
     }
 
     const finalLetter = finalState.vettedLetter || finalState.assembledLetter || "";
-    const failed = finalState.currentStage === "failed";
+    // Success is signalled ONLY by finalizeNode returning currentStage="done"
+    // (both the normal save and the idempotent no-op). failNode returns
+    // "failed". CRITICAL: a node that throws on the terminal edge — most
+    // importantly finalizeNode itself — is swallowed by withErrorRecovery into
+    // currentStage="error" while the finalize→END edge still fires. Treating
+    // only "failed" as failure (the old check) misread "error" as success:
+    // pipeline_records was marked "completed", no error thrown, no
+    // pipeline_failed status, no refund — the letter stranded in `drafting`
+    // forever. Allow-list the success state instead so any non-"done" terminal
+    // (error/failed/unexpected) is correctly handled as a failure below.
+    const failed = finalState.currentStage !== "done";
     await updatePipelineRecord(pipelineId, {
       status: failed ? "failed" : "completed",
       currentStep: failed ? "failed" : "completed",
@@ -279,25 +289,19 @@ export async function processRunPipeline(
         { err: simpleResult.error, letterId },
         `[Worker] Simple pipeline failed for new user letter #${letterId}`
       );
-      await updatePipelineRecord(letterId, {
-        status: "failed",
-        currentStep: "failed",
-        progress: 100,
-        errorMessage: simpleResult.error ?? "Simple pipeline failed",
-        completedAt: new Date(),
-      });
-      await updateLetterStatus(
-        letterId,
-        LETTER_STATUS.pipeline_failed,
-        { force: true }
+      // Unified failure bookkeeping (pipeline_record, status, refund) lives
+      // in the catch block below — throw the typed error to reach it.
+      throw new PipelineError(
+        "DRAFTING_PROVIDER_FAILED" as any,
+        simpleResult.error ?? "Simple pipeline failed",
+        "pipeline"
       );
-      return;
     } catch (bypassErr) {
       const msg =
         bypassErr instanceof Error ? bypassErr.message : String(bypassErr);
       logger.error(
         { err: msg, letterId },
-        `[Worker] New-user bypass threw for letter #${letterId}`
+        `[Worker] New-user bypass failed for letter #${letterId}`
       );
       await updatePipelineRecord(letterId, {
         status: "failed",
@@ -311,7 +315,35 @@ export async function processRunPipeline(
         LETTER_STATUS.pipeline_failed,
         { force: true }
       ).catch(() => {});
-      return;
+      // Refund on failure. This block previously returned silently WITHOUT
+      // refunding — and because the new-user bypass runs before the
+      // executionRoute switch, free-trial submissions could never reach the
+      // refunding "simple" route below: a failed free-trial generation
+      // permanently consumed the user's only trial slot.
+      if (userId && usageContext?.shouldRefundOnFailure) {
+        try {
+          if (usageContext.isFreeTrialSubmission) {
+            await refundFreeTrialSlot(userId);
+            logger.info(
+              `[Worker] Refunded free trial slot for user #${userId} after simple-pipeline failure on letter #${letterId}`
+            );
+          } else {
+            await decrementLettersUsed(userId);
+            logger.info(
+              `[Worker] Refunded letter credit for user #${userId} after simple-pipeline failure on letter #${letterId}`
+            );
+          }
+        } catch (refundErr) {
+          logger.error(
+            { err: refundErr, letterId, userId },
+            "[Worker] Failed to refund usage after new-user bypass failure"
+          );
+        }
+      }
+      // Re-throw so pg-boss records the job as failed (retryLimit=0, so no
+      // re-delivery / double-refund) and ops dashboards see the failure
+      // instead of a silent success.
+      throw bypassErr;
     } finally {
       await releasePipelineLock(letterId).catch(e =>
         logger.error(

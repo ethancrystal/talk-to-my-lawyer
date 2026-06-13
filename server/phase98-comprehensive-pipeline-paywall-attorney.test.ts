@@ -207,7 +207,11 @@ describe("Phase 98: Comprehensive Pipeline → Paywall → Attorney → Review W
       };
 
       expect(ALLOWED_TRANSITIONS.letter_released_to_subscriber).toContain("pending_review");
-      expect(ALLOWED_TRANSITIONS.upsell_dismissed).toContain("pending_review");
+      // `upsell_dismissed` is a display-only status, NOT a transition source
+      // (see shared/types/letter.ts header). The real upsell status that
+      // routes to pending_review on payment is attorney_review_upsell_shown.
+      expect(ALLOWED_TRANSITIONS.attorney_review_upsell_shown).toContain("pending_review");
+      expect(ALLOWED_TRANSITIONS.attorney_review_checkout_started).toContain("pending_review");
     });
 
     it("should decrement subscriber's monthly letter quota on payment", () => {

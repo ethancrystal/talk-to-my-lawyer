@@ -44,9 +44,12 @@ function readClient(...parts: string[]): string {
 describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", () => {
   const source = readServer("db", "letter-versions.ts");
 
-  it("imports the shared isFreePreviewUnlocked helper", () => {
+  it("imports the shared isDraftPreviewUnlocked helper", () => {
+    // Renamed from isFreePreviewUnlocked/free-preview during the
+    // draft-preview consolidation (the 24h gate now applies to paid
+    // subscribers too, not just the free-trial lead magnet).
     expect(source).toMatch(
-      /import\s*\{\s*isFreePreviewUnlocked\s*\}\s*from\s*"[^"]*shared\/utils\/free-preview"/
+      /import\s*\{\s*isDraftPreviewUnlocked\s*\}\s*from\s*"[^"]*shared\/utils\/draft-preview"/
     );
   });
 
@@ -56,19 +59,26 @@ describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", (
     );
   });
 
-  it("decides freePreviewUnlocked via the shared helper", () => {
-    expect(source).toMatch(/isFreePreviewUnlocked\(/);
+  it("decides draftPreviewUnlocked via the shared helper", () => {
+    expect(source).toMatch(/isDraftPreviewUnlocked\(/);
   });
 
-  it("returns empty content + freePreviewWaiting:true for pre-unlock free-preview", () => {
+  it("returns empty content + draftPreviewWaiting:true (and back-compat freePreviewWaiting) pre-unlock", () => {
     expect(source).toMatch(
-      /content:\s*""[\s\S]*?freePreviewWaiting:\s*true\s*as\s*const/
+      /content:\s*""[\s\S]*?draftPreviewWaiting:\s*true\s*as\s*const/
+    );
+    // Back-compat flag for free-trial consumers of the old field name.
+    expect(source).toMatch(
+      /freePreviewWaiting:\s*isFreePreview\s*\?\s*\(true as const\)\s*:\s*undefined/
     );
   });
 
-  it("returns full draft + freePreview:true for unlocked free-preview", () => {
+  it("returns full draft + draftPreview:true (and back-compat freePreview) when unlocked", () => {
     expect(source).toMatch(
-      /freePreviewUnlocked[\s\S]*?freePreview:\s*true\s*as\s*const/
+      /draftPreviewUnlocked[\s\S]*?draftPreview:\s*true\s*as\s*const/
+    );
+    expect(source).toMatch(
+      /freePreview:\s*isFreePreview\s*\?\s*\(true as const\)\s*:\s*undefined/
     );
   });
 
@@ -76,12 +86,12 @@ describe("Phase 95 — getLetterVersionsByRequestId: pre-unlock content gate", (
     expect(source).toMatch(/truncateContent\(v\.content\)/);
   });
 
-  it("orders the branches so the free-preview gate runs BEFORE truncation", () => {
-    const idxFreePreview = source.indexOf("freePreviewWaiting: true as const");
+  it("orders the branches so the draft-preview gate runs BEFORE truncation", () => {
+    const idxDraftPreview = source.indexOf("draftPreviewWaiting: true as const");
     const idxTruncate = source.indexOf("truncateContent(v.content)");
-    expect(idxFreePreview).toBeGreaterThan(0);
+    expect(idxDraftPreview).toBeGreaterThan(0);
     expect(idxTruncate).toBeGreaterThan(0);
-    expect(idxFreePreview).toBeLessThan(idxTruncate);
+    expect(idxDraftPreview).toBeLessThan(idxTruncate);
   });
 });
 
@@ -118,14 +128,16 @@ describe("Phase 95 — versions.get delegates to applyFreePreviewGate", () => {
     );
   });
 
-  it("admits subscriber ai_draft access when free-preview OR locked (ownership first)", () => {
-    // Access guard: ownership + (isFreePreview || isLocked). Without the
-    // isFreePreview branch, a post-payment free-preview letter would get
-    // FORBIDDEN for its own ai_draft.
-    expect(source).toMatch(/letter\?\.isFreePreview\s*===\s*true/);
+  it("admits subscriber ai_draft access when draft-gated OR locked (ownership first)", () => {
+    // Access guard: ownership + (isDraftVisibilityGated || isLocked). The
+    // draft-visibility gate (freePreviewUnlockAt set) now covers BOTH the
+    // free-trial path and paid subscribers, so the guard keys on the gate
+    // timestamp rather than isFreePreview. Without that branch, a
+    // post-payment gated letter would get FORBIDDEN for its own ai_draft.
+    expect(source).toMatch(/Boolean\(letter\?\.freePreviewUnlockAt\)/);
     expect(source).toMatch(/LOCKED_PREVIEW_STATUSES\.has\(letter\.status\)/);
     expect(source).toMatch(
-      /letter\.userId\s*===\s*ctx\.user\.id\s*&&\s*\(isFreePreview\s*\|\|\s*isLocked\)/
+      /letter\.userId\s*===\s*ctx\.user\.id\s*&&\s*\(isDraftVisibilityGated\s*\|\|\s*isLocked\)/
     );
   });
 
@@ -210,23 +222,28 @@ describe("Phase 95 — draftPdfRoute blocks free-preview PDF pre-review", () => 
 describe("Phase 95 — LetterDetail renders from the server freePreview flag", () => {
   const source = readClient("pages", "subscriber", "LetterDetail.tsx");
 
-  it("imports the new FreePreviewWaiting component", () => {
+  it("imports the DraftPreviewWaiting component", () => {
+    // Renamed from FreePreviewWaiting during the draft-preview consolidation
+    // (waiting state now covers paid subscribers too, not just free trials).
     expect(source).toMatch(
-      /import\s*\{\s*FreePreviewWaiting\s*\}\s*from\s*"@\/components\/FreePreviewWaiting"/
+      /import\s*\{\s*DraftPreviewWaiting\s*\}\s*from\s*"@\/components\/DraftPreviewWaiting"/
     );
   });
 
-  it("defines freePreviewUnlocked from letter.isFreePreview + aiDraftVersion.freePreview + content", () => {
+  it("derives draftPreviewUnlocked from the server flags + content, and freePreviewUnlocked on top", () => {
     expect(source).toMatch(
-      /const\s+freePreviewUnlocked\s*=[\s\S]*?letter\.isFreePreview\s*===\s*true[\s\S]*?aiDraftVersion as any\)\?\.freePreview\s*===\s*true[\s\S]*?Boolean\(aiDraftVersion\?\.content\)/
+      /const\s+draftPreviewUnlocked\s*=[\s\S]*?aiDraftVersion as any\)\?\.draftPreview\s*===\s*true[\s\S]*?aiDraftVersion as any\)\?\.freePreview\s*===\s*true[\s\S]*?Boolean\(aiDraftVersion\?\.content\)/
     );
     expect(source).toMatch(
-      /<FreePreviewWaiting[\s\S]*?subject=\{letter\.subject\}/
+      /const\s+freePreviewUnlocked\s*=\s*letter\.isFreePreview\s*===\s*true\s*&&\s*draftPreviewUnlocked/
+    );
+    expect(source).toMatch(
+      /<DraftPreviewWaiting[\s\S]*?subject=\{letter\.subject\}/
     );
   });
 
-  it("renders FreePreviewWaiting without unlockAt prop", () => {
-    const waitingCall = source.match(/<FreePreviewWaiting[\s\S]*?\/>/);
+  it("renders DraftPreviewWaiting without unlockAt prop", () => {
+    const waitingCall = source.match(/<DraftPreviewWaiting[\s\S]*?\/>/);
     expect(waitingCall).toBeTruthy();
     expect(waitingCall![0]).toMatch(/subject=\{letter\.subject\}/);
     expect(waitingCall![0]).not.toMatch(/unlockAt=/);
@@ -238,8 +255,8 @@ describe("Phase 95 — LetterDetail renders from the server freePreview flag", (
     );
   });
 
-  it("popup effect requires freePreviewUnlocked AND content before opening", () => {
-    expect(source).toMatch(/if\s*\(!freePreviewUnlocked\)\s*return/);
+  it("popup effect requires draftPreviewUnlocked AND content before opening", () => {
+    expect(source).toMatch(/if\s*\(!draftPreviewUnlocked\)\s*return/);
   });
 });
 
