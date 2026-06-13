@@ -19,6 +19,7 @@ import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
 import { getUserById } from "./db";
 import { sendDraftReminderEmail } from "./email";
+import { authorizeCronRequest } from "./_core/cronAuth";
 import { logger } from "./logger";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -178,15 +179,8 @@ export async function processDraftReminders(): Promise<ReminderResult> {
  */
 export function registerDraftRemindersRoute(app: Express): void {
   app.post("/api/cron/draft-reminders", async (req: Request, res: Response) => {
-    // ── Auth guard ──────────────────────────────────────────────────────────
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = req.headers["authorization"] ?? "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (token !== cronSecret) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-    }
+    // ── Auth guard (fail-closed in production; constant-time compare) ────────
+    if (!authorizeCronRequest(req, res)) return;
     // ── Run ─────────────────────────────────────────────────────────────────
     try {
       const result = await processDraftReminders();

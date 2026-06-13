@@ -199,10 +199,22 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> 
     currentPeriodStart: period.start,
     currentPeriodEnd: period.end,
     cancelAtPeriodEnd: period.cancelAtPeriodEnd,
-    resetLettersUsed: true, // Reset usage counter at the start of each billing period
+    // Only reset the letter quota when a genuinely NEW billing period begins:
+    //   - subscription_create: first invoice for a brand-new subscription
+    //   - subscription_cycle:  natural period rollover (renewal)
+    // Stripe also fires invoice.paid for prorations, plan changes
+    // (subscription_update), manual/one-off invoices, etc. Unconditionally
+    // resetting on every invoice.paid handed the subscriber a fresh batch of
+    // paid letters on any mid-cycle invoice — a direct, repeatable revenue leak.
+    resetLettersUsed:
+      invoice.billing_reason === "subscription_cycle" ||
+      invoice.billing_reason === "subscription_create",
   });
 
-  stripeLogger.info({ userId }, "[StripeWebhook] Invoice paid, subscription renewed");
+  stripeLogger.info(
+    { userId, billingReason: invoice.billing_reason },
+    "[StripeWebhook] Invoice paid"
+  );
 
   // ─── Recurring commission tracking ───────────────────────────────────────
   const subMeta = parseSubscriptionMetadata(sub);

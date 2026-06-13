@@ -25,6 +25,7 @@ import { getDb } from "./db";
 import { letterRequests } from "../drizzle/schema";
 import { getUserById, isUserFirstLetterEligible } from "./db";
 import { sendPaywallNotificationEmail } from "./email";
+import { authorizeCronRequest } from "./_core/cronAuth";
 import { hasActiveRecurringSubscription } from "./stripe";
 import { createLogger } from "./logger";
 
@@ -218,15 +219,8 @@ export async function processPaywallEmails(): Promise<PaywallEmailResult> {
  */
 export function registerPaywallEmailRoute(app: Express): void {
   app.post("/api/cron/paywall-emails", async (req: Request, res: Response) => {
-    // ── Auth guard ──────────────────────────────────────────────────────────
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = req.headers["authorization"] ?? "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (token !== cronSecret) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-    }
+    // ── Auth guard (fail-closed in production; constant-time compare) ────────
+    if (!authorizeCronRequest(req, res)) return;
 
     // ── Run ─────────────────────────────────────────────────────────────────
     try {

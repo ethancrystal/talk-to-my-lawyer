@@ -40,17 +40,27 @@ export function registerClientPortalRoute(app: Express): void {
         });
       }
 
-      // Fetch the final approved letter version
+      // Fetch the attorney-approved letter version. The portal serves the
+      // letter to an EXTERNAL recipient, so it must ONLY ever expose a
+      // final_approved version. Falling back to attorney_edit or versions[0]
+      // (which can be the un-reviewed ai_draft) would put an unreviewed,
+      // AI-generated letter — bearing the firm's name — in front of a third
+      // party with no attorney sign-off (UPL / malpractice exposure). A portal
+      // token is only issued once a letter is delivered, by which point a
+      // final_approved version exists; if it somehow doesn't, fail closed.
       const versions = await getLetterVersionsByRequestId(
         record.letterRequestId,
-        false // include all versions — we'll pick final_approved
+        false
       );
-      const finalVersion =
-        versions.find((v) => v.versionType === "final_approved") ??
-        versions.find((v) => v.versionType === "attorney_edit") ??
-        versions[0];
+      const finalVersion = versions.find(
+        (v) => v.versionType === "final_approved"
+      );
 
       if (!finalVersion) {
+        logger.warn(
+          { letterRequestId: record.letterRequestId },
+          "[Portal] No final_approved version — refusing to serve unreviewed content"
+        );
         return res.status(404).json({
           error: "Letter content is not available yet.",
         });

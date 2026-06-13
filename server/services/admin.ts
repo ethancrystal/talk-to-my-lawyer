@@ -594,9 +594,34 @@ export async function forceStatusTransition(
     return { success: true, bypassed: true };
   }
 
-  if (
+  // Statuses that represent attorney approval or delivery to the recipient.
+  // Forcing a letter into ANY of these without an attorney-approved
+  // (final_approved) version would put an unreviewed, AI-generated letter in
+  // front of a recipient under an attorney's name — defeating the product's
+  // central legal-safety control (mandatory attorney review) and creating
+  // direct UPL / malpractice exposure. Even a super-admin override must not
+  // bypass this; the legitimate "rescue a stuck letter" path goes through
+  // under_review (the bypass branch above), where an attorney still signs off.
+  const REQUIRES_FINAL_APPROVED = new Set([
+    "approved",
+    "client_approval_pending",
+    "client_approved",
+    "sent",
+  ]);
+
+  if (REQUIRES_FINAL_APPROVED.has(input.newStatus)) {
+    const versions = await getLetterVersionsByRequestId(input.letterId, true);
+    const hasFinalApproved = versions.some(
+      (v) => v.versionType === "final_approved"
+    );
+    if (!hasFinalApproved) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `Cannot force to "${input.newStatus}": no attorney-approved (final_approved) version exists. An attorney must approve this letter before it can be delivered.`,
+      });
+    }
+  } else if (
     input.newStatus === "pending_review" ||
-    input.newStatus === "approved" ||
     input.newStatus === "under_review"
   ) {
     const versions = await getLetterVersionsByRequestId(input.letterId, true);
