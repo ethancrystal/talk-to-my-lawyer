@@ -60,15 +60,21 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
 
   stripeLogger.info({ eventType: event.type, eventId: event.id }, "[StripeWebhook] Processing event");
 
-  // ─── Idempotency: skip duplicate events ──────────────────────────────────
+  // ─── Idempotency: atomic claim BEFORE processing ─────────────────────────
+  // Insert the marker first and act only if WE inserted it (RETURNING is empty
+  // on conflict). The old pattern was check-then-act — a SELECT, then process,
+  // then INSERT — so two concurrent deliveries of the same event (Stripe does
+  // retry/duplicate) could both pass the SELECT and process the event twice
+  // (e.g. double commission, double quota reset). The atomic insert-claim
+  // closes that race: exactly one caller wins the row and processes.
   const db = await getDb();
   if (db) {
-    const existing = await db
-      .select({ eventId: processedStripeEvents.eventId })
-      .from(processedStripeEvents)
-      .where(eq(processedStripeEvents.eventId, event.id))
-      .limit(1);
-    if (existing.length > 0) {
+    const claim = await db
+      .insert(processedStripeEvents)
+      .values({ eventId: event.id, eventType: event.type })
+      .onConflictDoNothing()
+      .returning({ eventId: processedStripeEvents.eventId });
+    if (claim.length === 0) {
       stripeLogger.info({ eventId: event.id }, "[StripeWebhook] Duplicate event, skipping");
       res.json({ received: true, duplicate: true });
       return;
@@ -103,14 +109,6 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
         stripeLogger.info({ eventType: event.type }, "[StripeWebhook] Unhandled event type");
     }
 
-    // ─── Mark event as processed (idempotency write) ──────────────────────
-    if (db) {
-      await db.insert(processedStripeEvents).values({
-        eventId: event.id,
-        eventType: event.type,
-      }).onConflictDoNothing();
-    }
-
     res.json({ received: true });
     responded = true;
   } catch (err: any) {
@@ -119,6 +117,21 @@ export async function stripeWebhookHandler(req: Request, res: Response): Promise
       tags: { component: "stripe_webhook", event_type: event.type },
       extra: { eventId: event.id, eventType: event.type },
     });
+    // Roll back the idempotency claim so Stripe's automatic retry can
+    // re-process this event. Without this, a transient handler failure would
+    // permanently swallow the event (the marker would block every retry).
+    if (db) {
+      try {
+        await db
+          .delete(processedStripeEvents)
+          .where(eq(processedStripeEvents.eventId, event.id));
+      } catch (rollbackErr) {
+        stripeLogger.error(
+          { err: rollbackErr, eventId: event.id },
+          "[StripeWebhook] Failed to roll back idempotency claim after handler error"
+        );
+      }
+    }
     if (!responded) {
       res.status(500).json({ error: "Webhook processing failed" });
     }

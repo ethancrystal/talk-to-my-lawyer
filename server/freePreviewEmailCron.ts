@@ -39,6 +39,7 @@ import { getDb } from "./db";
 import { letterRequests, notifications } from "../drizzle/schema";
 import { createNotification, getUserById } from "./db";
 import { sendFreePreviewReadyEmail } from "./email";
+import { authorizeCronRequest } from "./_core/cronAuth";
 import { createLogger } from "./logger";
 
 const freePreviewLogger = createLogger({ module: "FreePreviewEmails" });
@@ -484,17 +485,8 @@ export function registerFreePreviewEmailRoute(app: Express): void {
   app.post(
     "/api/cron/free-preview-emails",
     async (req: Request, res: Response) => {
-      // ── Auth guard ──────────────────────────────────────────────────────────
-      const cronSecret = process.env.CRON_SECRET;
-      if (cronSecret) {
-        const authHeader = req.headers["authorization"] ?? "";
-        const token = authHeader.startsWith("Bearer ")
-          ? authHeader.slice(7)
-          : "";
-        if (token !== cronSecret) {
-          return res.status(401).json({ error: "Unauthorized" });
-        }
-      }
+      // ── Auth guard (fail-closed in production; constant-time compare) ──────
+      if (!authorizeCronRequest(req, res)) return;
 
       // ── Run ─────────────────────────────────────────────────────────────────
       try {

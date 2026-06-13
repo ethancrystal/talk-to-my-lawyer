@@ -54,8 +54,16 @@ vi.mock("./db", () => ({
     }),
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        // Stripe webhook idempotency now uses an atomic insert-claim
+        // (INSERT ... ON CONFLICT DO NOTHING RETURNING). A non-empty result
+        // means this caller won the claim and should process the event.
+        onConflictDoNothing: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ eventId: "claimed" }]),
+        }),
       }),
+    }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
     }),
   }),
   updateLetterStatus: vi.fn().mockResolvedValue(undefined),

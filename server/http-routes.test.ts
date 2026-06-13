@@ -104,6 +104,14 @@ vi.mock("./stripe", () => ({
   cancelSubscription: vi.fn().mockResolvedValue(undefined),
 }));
 
+// The invoice/subscription handlers import activateSubscription from the deep
+// module (../../stripe/subscriptions), NOT the ./stripe barrel — so it must be
+// mocked here too, and asserted against, otherwise the real DB-backed
+// implementation runs.
+vi.mock("./stripe/subscriptions", () => ({
+  activateSubscription: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("./stripe-products", () => ({
   getPlanConfig: vi.fn().mockReturnValue({ name: "Per Letter", stripePriceId: "price_test" }),
   PLANS: {},
@@ -161,7 +169,8 @@ const { registerDraftPdfRoute } = await import("./draftPdfRoute");
 const { registerDraftRemindersRoute } = await import("./draftReminders");
 const { getPublicHealth, getDetailedHealth } = await import("./healthCheck");
 const { authenticateRequest } = await import("./supabaseAuth");
-const { getStripe, activateSubscription } = await import("./stripe");
+const { getStripe } = await import("./stripe");
+const { activateSubscription } = await import("./stripe/subscriptions");
 const { getDb, getUserById, getLetterRequestById,
         getLetterRequestSafeForSubscriber, getLetterVersionsByRequestId } = await import("./db");
 const { generateDraftPdfBuffer } = await import("./pdfGenerator");
@@ -195,6 +204,11 @@ function startServer(app: express.Express): Promise<TestServer> {
 
 /** DB mock with properly chained methods including onConflictDoNothing */
 function makeDbMock(selectData: any[] = []) {
+  // selectData non-empty models "this event was already processed". The Stripe
+  // webhook now does an ATOMIC insert-claim (INSERT ... ON CONFLICT DO NOTHING
+  // RETURNING) instead of a SELECT-then-act, so the claim resolves to [] for an
+  // already-seen event (conflict) and to one row for a fresh event.
+  const alreadyProcessed = selectData.length > 0;
   return {
     select: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -205,13 +219,20 @@ function makeDbMock(selectData: any[] = []) {
     }),
     insert: vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        onConflictDoNothing: vi.fn().mockReturnValue({
+          returning: vi
+            .fn()
+            .mockResolvedValue(alreadyProcessed ? [] : [{ eventId: "claimed" }]),
+        }),
       }),
     }),
     update: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
       }),
+    }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
     }),
     execute: vi.fn().mockResolvedValue([]),
   };
@@ -645,6 +666,56 @@ describe("POST /api/stripe/webhook", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.received).toBe(true);
+  });
+
+  // ── Revenue-leak regression: invoice.paid must only reset the letter quota
+  // on a genuinely new billing period (subscription_create / subscription_cycle),
+  // never on prorations / plan-changes / manual invoices. ──────────────────────
+  const invoicePaidEvent = (id: string, billingReason: string) => ({
+    id,
+    type: "invoice.paid",
+    data: {
+      object: {
+        id: "in_test",
+        customer: "cus_test",
+        billing_reason: billingReason,
+        amount_paid: 29900,
+        parent: { subscription_details: { subscription: "sub_test" } },
+      },
+    },
+  });
+
+  it("invoice.paid resets the letter quota on subscription_cycle (renewal)", async () => {
+    vi.mocked(getStripe).mockReturnValue(
+      makeMockStripe(invoicePaidEvent("evt_inv_cycle", "subscription_cycle")) as any
+    );
+    const res = await postWebhook(JSON.stringify({}));
+    expect(res.status).toBe(200);
+    expect(activateSubscription).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resetLettersUsed: true })
+    );
+  });
+
+  it("invoice.paid does NOT reset the quota on subscription_update (proration) — revenue-leak guard", async () => {
+    vi.mocked(getStripe).mockReturnValue(
+      makeMockStripe(invoicePaidEvent("evt_inv_update", "subscription_update")) as any
+    );
+    const res = await postWebhook(JSON.stringify({}));
+    expect(res.status).toBe(200);
+    expect(activateSubscription).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resetLettersUsed: false })
+    );
+  });
+
+  it("invoice.paid does NOT reset the quota on a manual invoice — revenue-leak guard", async () => {
+    vi.mocked(getStripe).mockReturnValue(
+      makeMockStripe(invoicePaidEvent("evt_inv_manual", "manual")) as any
+    );
+    const res = await postWebhook(JSON.stringify({}));
+    expect(res.status).toBe(200);
+    expect(activateSubscription).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resetLettersUsed: false })
+    );
   });
 });
 
