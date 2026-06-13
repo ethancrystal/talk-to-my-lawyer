@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fileURLToPath } from "node:url";
 import { storagePut } from "./storage";
 import { generatePdfViaWorker } from "./workerPdfClient";
 import { generateAndUploadApprovedPdf } from "./pdfGenerator";
@@ -201,7 +202,7 @@ describe("My Letters page", () => {
   it("shows PDF Ready badge when letter is approved and has pdfUrl", async () => {
     const source = await import("fs").then(fs =>
       fs.readFileSync(
-        new URL("../client/src/pages/subscriber/MyLetters.tsx", import.meta.url).pathname,
+        fileURLToPath(new URL("../client/src/pages/subscriber/MyLetters.tsx", import.meta.url)),
         "utf-8"
       )
     );
@@ -212,7 +213,7 @@ describe("My Letters page", () => {
   it("shows approved letter with green styling", async () => {
     const source = await import("fs").then(fs =>
       fs.readFileSync(
-        new URL("../client/src/pages/subscriber/MyLetters.tsx", import.meta.url).pathname,
+        fileURLToPath(new URL("../client/src/pages/subscriber/MyLetters.tsx", import.meta.url)),
         "utf-8"
       )
     );
@@ -225,12 +226,12 @@ describe("My Letters page", () => {
     const fs = await import("fs");
     const path = await import("path");
     const letterDetailSrc = fs.readFileSync(
-      new URL("../client/src/pages/subscriber/LetterDetail.tsx", import.meta.url).pathname,
+      fileURLToPath(new URL("../client/src/pages/subscriber/LetterDetail.tsx", import.meta.url)),
       "utf-8"
     );
     const approvedPanelSrc = fs.readFileSync(
-      path.resolve(
-        new URL("../client/src/components/subscriber/letter-detail/ApprovedLetterPanel.tsx", import.meta.url).pathname
+      fileURLToPath(
+        new URL("../client/src/components/subscriber/letter-detail/ApprovedLetterPanel.tsx", import.meta.url)
       ),
       "utf-8"
     );

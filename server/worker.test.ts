@@ -66,6 +66,14 @@ vi.mock("./pipeline/graph", () => ({
   appGraph: {
     streamEvents: vi.fn(),
   },
+  // Post-PR#58 the worker streams via getGraphWithCheckpointer() (durable
+  // Postgres checkpointer) rather than the bare appGraph. Without this export
+  // the langgraph route throws "No getGraphWithCheckpointer export" before any
+  // assertion runs. The standard-route tests below never invoke it (they pin
+  // LANGGRAPH_DISABLED), but the export must exist for the module to load.
+  getGraphWithCheckpointer: vi.fn().mockResolvedValue({
+    streamEvents: vi.fn(),
+  }),
 }));
 
 vi.mock("./db", () => ({
@@ -111,6 +119,17 @@ vi.mock("./_core/env", () => ({
 vi.mock("dotenv/config", () => ({}));
 
 process.env.DATABASE_URL = "postgresql://mock:5432/test";
+
+// PR#58 made the LangGraph state graph the DEFAULT product route. The worker
+// tests in this file assert the STANDARD-route machinery — the 4× retry loop,
+// stage-aware retry, bestEffortFallback, tier-3 fallback, and refund-on-
+// exhaustion — which in production is reached via the LANGGRAPH_DISABLED
+// emergency-rollback hatch. Pin it so resolvePipelineExecutionRoute() returns
+// "standard" and runFullPipeline is exercised exactly as these tests expect.
+// (routing.ts reads process.env at call time, so setting it here is sufficient;
+// vitest isolates env per test file so this does not leak to other suites.)
+process.env.LANGGRAPH_DISABLED = "true";
+delete process.env.LANGGRAPH_PIPELINE;
 
 const { processRunPipeline, processRetryFromStage, processJob } =
   await import("./worker");

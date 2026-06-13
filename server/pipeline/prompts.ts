@@ -10,18 +10,56 @@ export function buildResearchSystemPrompt(): string {
 }
 
 export function buildResearchUserPrompt(intake: NormalizedPromptInput): string {
+  // The research-user.md template expects discrete jurisdiction fields
+  // (country/state/city), a cityOrState convenience value, today/currentYear
+  // date anchors, and optional pre-formatted blocks (financialsLine,
+  // deadlineDate, toneNote, timeline). Earlier this builder passed a single
+  // {{jurisdiction}} plus {{amountOwed}}/{{situationFields}} that the template
+  // no longer references, which shipped ~11 literal {{placeholders}} to the
+  // research model. Every placeholder the template uses MUST be supplied here.
+  const now = new Date();
+  const today = now.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const { country, state, city } = intake.jurisdiction;
+  const cityOrState = city ? `${city}, ${state}` : state;
+
+  const financialsLine =
+    intake.financials?.amountOwed != null
+      ? `**Amount in Dispute:** ${intake.financials.currency || "USD"} ${intake.financials.amountOwed}`
+      : "";
+  const deadlineDate = intake.deadlineDate
+    ? `**Response Deadline:** ${intake.deadlineDate}`
+    : "";
+  const toneNote = `**Tone:** ${intake.tonePreference}`;
+  const timeline =
+    intake.timeline.length > 0
+      ? `## Timeline of Events\n${intake.timeline.map((t) => `- ${t}`).join("\n")}`
+      : "";
+
   return loadPrompt("research-user.md", {
+    today,
+    currentYear: String(now.getFullYear()),
     letterType: intake.letterType.replace(/-/g, " ").toUpperCase(),
-    jurisdiction: `${intake.jurisdiction.state}, ${intake.jurisdiction.country}${intake.jurisdiction.city ? `, ${intake.jurisdiction.city}` : ""}`,
+    matterCategory:
+      intake.matterCategory || intake.matter.category || "General Legal Matter",
+    country,
+    state,
+    city: city || "Not specified",
+    cityOrState,
     subject: intake.matter.subject,
-    description: intake.matter.description,
     incidentDate: intake.matter.incidentDate || "Not specified",
-    amountOwed: intake.financials?.amountOwed?.toString() || "Not specified",
+    financialsLine,
     desiredOutcome: intake.desiredOutcome,
+    deadlineDate,
+    toneNote,
+    description: intake.matter.description,
     additionalContext: intake.additionalContext || "None",
-    evidenceSummary: intake.evidenceSummary || "No specific evidence items extracted yet",
-    situationFields: intake.situationFields ? Object.entries(intake.situationFields)
-      .map(([k, v]) => `- ${k}: ${v}`).join("\n") : "None"
+    evidenceSummary:
+      intake.evidenceSummary || "No specific evidence items extracted yet",
+    timeline,
   });
 }
 

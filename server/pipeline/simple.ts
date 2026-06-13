@@ -34,13 +34,31 @@ const logger = createLogger({ module: "simple-pipeline" });
  * Enable via PIPELINE_MODE=simple
  */
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// Lazy client construction — mirrors the ENV lazy-getter convention in
+// server/_core/env.ts. Constructing these at module load crashes any
+// importing module when the key is absent (the OpenAI SDK throws in its
+// constructor), which breaks test files and couples unrelated modules to
+// AI env vars. Clients are memoized per process; keys are re-read from
+// process.env on first use.
+let anthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic {
+  if (!anthropicClient) {
+    anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+  return anthropicClient;
+}
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiClient: OpenAI | null = null;
+function getOpenAiClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
 const OPENAI_MODEL = process.env.OPENAI_FINALIZER_MODEL ?? "gpt-4o";
@@ -105,7 +123,7 @@ Output only the letter content, ready to send.`;
  */
 async function generateLetter(prompt: string): Promise<GenerationResult> {
   try {
-    const message = await anthropic.messages.create({
+    const message = await getAnthropicClient().messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 4096,
       system: withRawCacheControl(SIMPLE_SYSTEM_PROMPT),
@@ -142,7 +160,7 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
       "[Simple] Claude failed, falling back to OpenAI"
     );
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAiClient().chat.completions.create({
       model: OPENAI_MODEL,
       max_tokens: 4096,
       messages: [
@@ -239,7 +257,7 @@ async function finalizeGeminiDraftWithOpenAI(
   originalPrompt: string,
   geminiDraft: GeminiDraftResult
 ): Promise<GenerationResult> {
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAiClient().chat.completions.create({
     model: OPENAI_MODEL,
     max_tokens: 4096,
     messages: [

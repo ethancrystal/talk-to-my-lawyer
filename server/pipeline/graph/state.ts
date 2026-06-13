@@ -91,10 +91,22 @@ export const PipelineState = Annotation.Root({
     default: () => "",
   }),
 
-  /** True when research fell back to Claude (no web grounding) */
+  /**
+   * True when the research used for this letter is NOT web-grounded and must
+   * be treated as unverified by downstream stages (tighter anti-hallucination
+   * discipline; attorney must verify citations at approval).
+   *
+   * Defaults to TRUE (fail-safe): the only LLM research path today is
+   * ungrounded, and — critically — if researchNode throws, withErrorRecovery
+   * swallows the error WITHOUT setting this flag while the unconditional
+   * research→draft edge still advances. A `false` default in that case would
+   * tell draft/assembly/vetting the (nonexistent) research was reliable,
+   * RELAXING discipline exactly when it should tighten. Only a genuinely
+   * web-grounded research path may flip this to false on success.
+   */
   researchUnverified: Annotation<boolean>({
     reducer: (_, update) => update,
-    default: () => false,
+    default: () => true,
   }),
 
   /** The assembled final letter text */

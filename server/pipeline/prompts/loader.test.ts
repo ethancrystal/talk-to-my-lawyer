@@ -16,6 +16,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadPrompt, getPromptCandidateDirs } from "./loader";
+import { buildResearchUserPrompt } from "../prompts";
+import { buildNormalizedPromptInput } from "../../intake-normalizer";
 import {
   PIPELINE_ERROR_CATEGORY,
   PIPELINE_ERROR_CODES,
@@ -39,22 +41,33 @@ describe("loadPrompt — happy path (tsx/dev: __dirname holds the markdown)", ()
   });
 
   it("substitutes {{variable}} placeholders in the loaded content", () => {
-    // research-user.md contains placeholders like {{letterType}}, {{jurisdiction}}.
+    // research-user.md uses discrete jurisdiction fields ({{state}}/{{country}}/
+    // {{city}}) plus date anchors and pre-formatted blocks — NOT a single
+    // {{jurisdiction}}. Supply the real template variables.
     const out = loadPrompt("research-user.md", {
+      today: "January 1, 2026",
+      currentYear: "2026",
       letterType: "DEMAND_LETTER",
-      jurisdiction: "California, US",
+      matterCategory: "Consumer",
+      country: "US",
+      state: "California",
+      city: "Los Angeles",
+      cityOrState: "Los Angeles, California",
       subject: "Test subject",
-      description: "Test description",
       incidentDate: "2026-01-01",
-      amountOwed: "1000",
+      financialsLine: "**Amount in Dispute:** USD 1000",
       desiredOutcome: "Refund",
+      deadlineDate: "",
+      toneNote: "**Tone:** firm",
+      description: "Test description",
       additionalContext: "None",
       evidenceSummary: "None",
-      situationFields: "None",
+      timeline: "",
     });
     expect(out).toContain("DEMAND_LETTER");
-    expect(out).toContain("California, US");
+    expect(out).toContain("California");
     expect(out).not.toMatch(/\{\{letterType\}\}/);
+    expect(out).not.toMatch(/\{\{state\}\}/);
   });
 });
 
@@ -219,5 +232,40 @@ describe("Dockerfile ships prompt markdown into the runtime image", () => {
     expect(dockerfile).toContain(
       "COPY --from=builder /app/server/pipeline/prompts/ ./dist/prompts/"
     );
+  });
+});
+
+describe("buildResearchUserPrompt — every template placeholder is supplied", () => {
+  // Regression guard: research-user.md was rewritten to use discrete
+  // jurisdiction fields + date anchors + pre-formatted blocks, but the builder
+  // kept passing the old {{jurisdiction}}/{{amountOwed}}/{{situationFields}}
+  // keys — so ~11 literal {{placeholders}} shipped to the research model. This
+  // test renders the prompt through the REAL builder + normalizer and fails if
+  // ANY {{placeholder}} survives, catching builder/template drift directly.
+  it("renders the research prompt with no unresolved {{placeholder}}", () => {
+    const normalized = buildNormalizedPromptInput(
+      {
+        subject: "Unreturned security deposit",
+        issueSummary: "Landlord withheld deposit beyond the statutory window",
+        jurisdictionCountry: "US",
+        jurisdictionState: "California",
+        jurisdictionCity: "Los Angeles",
+        letterType: "demand-letter",
+      },
+      {
+        letterType: "demand-letter",
+        matter: {
+          subject: "Unreturned security deposit",
+          description: "Deposit withheld more than 21 days after move-out",
+        },
+        desiredOutcome: "Return of the $2,000 deposit",
+      } as never
+    );
+
+    const out = buildResearchUserPrompt(normalized);
+
+    expect(out).not.toMatch(/\{\{\s*[a-zA-Z]+\s*\}\}/);
+    expect(out).toContain("California");
+    expect(out).toContain("DEMAND LETTER");
   });
 });

@@ -64,6 +64,21 @@ vi.mock("./db", async () => {
           }),
         };
       }),
+      // ensureFreePreviewReadyNotification() re-reads the letter and checks for
+      // an existing notification via db.select(). select() with no field arg is
+      // the letter fetch (returns the claimed row); select({ id }) is the
+      // existing-notification idempotency probe (returns empty → create one).
+      select: v.fn().mockImplementation((fields?: any) => ({
+        from: v.fn().mockImplementation(() => ({
+          where: v.fn().mockImplementation(() => ({
+            limit: v.fn().mockImplementation(async () =>
+              fields === undefined
+                ? (state.mockClaimReturns.length ? [state.mockClaimReturns[0]] : [])
+                : []
+            ),
+          })),
+        })),
+      })),
     })),
     getUserById: v.fn().mockImplementation(async (id: number) => {
       if (id === 42) {

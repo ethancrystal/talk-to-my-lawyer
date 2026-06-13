@@ -57,9 +57,12 @@ class MockDatabase {
 
     if (!eligible) return [];
 
-    // Atomic claim: stamp the row (simulating UPDATE...RETURNING)
-    const claimed = { ...this.letterRow };
+    // Atomic claim: stamp the row FIRST, then snapshot — real
+    // `UPDATE ... SET free_preview_email_sent_at = NOW() ... RETURNING *`
+    // returns the row AFTER the update, so the returned row must carry the
+    // new timestamp (callers read claimed[0] and act on the stamp).
     this.letterRow.freePreviewEmailSentAt = now;
+    const claimed = { ...this.letterRow };
     return [claimed];
   }
 
@@ -173,19 +176,28 @@ describe("Free-Preview Email Dispatch — Atomicity Guarantees", () => {
     });
 
     it("succeeds when all conditions are met (eligible state)", () => {
+      // Freeze the clock so the harness's internal `new Date()` (the stamp)
+      // and the test's `now` are byte-identical — otherwise toEqual on two
+      // Date objects created microseconds apart is flaky across ms boundaries.
       const now = new Date();
-      db.setLetter({
-        id: 1,
-        isFreePreview: true,
-        freePreviewUnlockAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
-        freePreviewEmailSentAt: null,
-        status: "letter_released_to_subscriber",
-        currentAiDraftVersionId: 999,
-      });
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+      try {
+        db.setLetter({
+          id: 1,
+          isFreePreview: true,
+          freePreviewUnlockAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+          freePreviewEmailSentAt: null,
+          status: "letter_released_to_subscriber",
+          currentAiDraftVersionId: 999,
+        });
 
-      const result = db.atomicClaimFreePreviewEmail(1);
-      expect(result).toHaveLength(1);
-      expect(result[0].freePreviewEmailSentAt).toEqual(now);
+        const result = db.atomicClaimFreePreviewEmail(1);
+        expect(result).toHaveLength(1);
+        expect(result[0].freePreviewEmailSentAt).toEqual(now);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

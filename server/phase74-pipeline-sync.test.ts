@@ -58,7 +58,7 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
   });
 
   describe("n8n callback — status transitions match direct pipeline", () => {
-    it("aligned 4-stage callback transitions: researching → drafting → generated_locked", async () => {
+    it("aligned 4-stage callback transitions: researching → drafting → ai_generation_completed_hidden", async () => {
       // Cold-import of the n8n callback now pulls in the modularized pipeline tree
       // (pipeline/research/, pipeline/vetting/, etc.), which exceeds the 5s default.
       // Import the route registration
@@ -72,6 +72,17 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
         },
       };
       registerN8nCallbackRoute(mockApp as any);
+
+      // Preview-gated letter (freePreviewUnlockAt stamped at submit, not admin,
+      // not previously unlocked) so isLetterPreviewGated() → true and the
+      // finalize helper resolves to the 24h hidden window, exactly like the
+      // direct simple/langgraph/fallback paths.
+      mockGetLetterRequestById.mockResolvedValue({
+        id: 42,
+        freePreviewUnlockAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        submittedByAdmin: false,
+        intakeJson: null,
+      });
 
       const mockRes = {
         json: vi.fn().mockReturnThis(),
@@ -157,8 +168,15 @@ describe("Phase 74: Pipeline Status Synchronization", () => {
         },
       };
 
-      // Mock getLetterRequestById to return null (no intake → direct generated_locked)
-      mockGetLetterRequestById.mockResolvedValueOnce(null);
+      // Preview-gated letter with NO intakeJson → the legacy branch skips local
+      // assembly and finalizes via the shared helper, which (because the letter
+      // is gated) resolves to the 24h hidden window — matching the direct path.
+      mockGetLetterRequestById.mockResolvedValue({
+        id: 99,
+        freePreviewUnlockAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        submittedByAdmin: false,
+        intakeJson: null,
+      });
 
       await handler!(mockReq, mockRes);
       await new Promise(r => setTimeout(r, 100));

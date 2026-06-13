@@ -50,10 +50,15 @@ describe("Plan configuration integrity", () => {
 
   it("all plans include attorney review in features", () => {
     for (const plan of Object.values(PLANS)) {
-      const hasAttorneyReview = plan.features.some(
-        (f) => f.toLowerCase().includes("attorney review")
-      );
-      expect(hasAttorneyReview).toBe(true);
+      // Mandatory attorney review is the core value prop, so every plan must
+      // advertise it. Accept both copy styles: subscription plans use
+      // "Attorney review included"; the one-time offer uses "1 attorney-reviewed
+      // letter". Both are the same claim — normalize the hyphen before matching.
+      const hasAttorneyReview = plan.features.some((f) => {
+        const norm = f.toLowerCase().replace(/attorney[-\s]reviewed?/g, "attorney review");
+        return norm.includes("attorney review");
+      });
+      expect(hasAttorneyReview, `plan "${plan.id}" must advertise attorney review`).toBe(true);
     }
   });
 });

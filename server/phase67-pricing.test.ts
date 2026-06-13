@@ -29,11 +29,16 @@ describe("Pricing constants", () => {
 });
 
 describe("PLANS configuration", () => {
-  it("has exactly 2 plans", () => {
-    expect(Object.keys(PLANS)).toHaveLength(2);
+  it("has exactly 3 plans (one-time + 2 subscriptions)", () => {
+    // The $200 one_time_letter offer was added in commit 3ab0918 (surfaced via
+    // the /pricing special-offer popup, not the main grid). It joins the two
+    // subscription plans in the canonical PLANS map.
+    expect(Object.keys(PLANS)).toHaveLength(3);
     expect(Object.keys(PLANS)).toEqual(
-      expect.arrayContaining(["monthly", "yearly"])
+      expect.arrayContaining(["one_time_letter", "monthly", "yearly"])
     );
+    // The deprecated legacy $299 single_letter must NOT be a live plan.
+    expect(Object.keys(PLANS)).not.toContain("single_letter");
   });
 
   describe("monthly plan", () => {
@@ -105,12 +110,14 @@ describe("getPlanConfig", () => {
 });
 
 describe("PLAN_LIST", () => {
-  it("has 2 plans", () => expect(PLAN_LIST).toHaveLength(2));
+  it("has 3 plans", () => expect(PLAN_LIST).toHaveLength(3));
 
-  it("includes all 2 plan IDs", () => {
+  it("includes all 3 plan IDs", () => {
     const ids = PLAN_LIST.map((p) => p.id);
+    expect(ids).toContain("one_time_letter");
     expect(ids).toContain("monthly");
     expect(ids).toContain("yearly");
+    expect(ids).not.toContain("single_letter");
   });
 });
 

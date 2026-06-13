@@ -418,10 +418,13 @@ describe("Stripe products config (stripe-products.ts)", () => {
     expect(getPlanConfig("nonexistent")).toBeUndefined();
   });
 
-  it("PLAN_LIST has 2 subscription plans", () => {
-    expect(PLAN_LIST).toHaveLength(2);
+  it("PLAN_LIST has the one-time offer + 2 subscription plans", () => {
+    // one_time_letter ($200 special offer, commit 3ab0918) + monthly + yearly.
+    // The deprecated legacy single_letter must never appear.
+    expect(PLAN_LIST).toHaveLength(3);
     const ids = PLAN_LIST.map((p) => p.id);
     expect(ids).not.toContain("single_letter");
+    expect(ids).toContain("one_time_letter");
     expect(ids).toContain("monthly");
     expect(ids).toContain("yearly");
   });

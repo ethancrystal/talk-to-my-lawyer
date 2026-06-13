@@ -172,11 +172,14 @@ describe("free preview 24-hour delay UX", () => {
     expect(source).toContain(
       "const displayStatus = (letter as any).subscriberDisplayStatus ?? letter.status;"
     );
+    // Draft-preview waiting renders before the paywall, gated on the
+    // server-driven isDraftPreviewPhase + draftPreviewUnlocked flags
+    // (consolidated gate — applies to free-trial AND paid 24h holds).
     expect(source).toMatch(
-      /letter\.isFreePreview === true[\s\S]*aiDraftVersion as any\)\?\.freePreview !== true[\s\S]*<DraftPreviewWaiting/
+      /isDraftPreviewPhase && !draftPreviewUnlocked \? \([\s\S]*?<DraftPreviewWaiting/
     );
     expect(source).toMatch(
-      /\(aiDraftVersion as any\)\?\.freePreview === true[\s\S]*<DraftPreviewViewer/
+      /isDraftPreviewPhase && draftPreviewUnlocked \? \([\s\S]*?<DraftPreviewViewer/
     );
     expect(source).toMatch(/: isGeneratedLocked \? \([\s\S]*<LetterPaywall/);
   });

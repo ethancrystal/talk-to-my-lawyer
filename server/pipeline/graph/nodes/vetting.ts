@@ -239,6 +239,52 @@ export function runDeterministicVettingChecks(
   };
 }
 
+const VALID_RISK_LEVELS = new Set(["low", "medium", "high", "critical"]);
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is string => typeof v === "string");
+}
+
+/**
+ * Coerce an arbitrary parsed value into a well-formed VettingReport.
+ *
+ * Fail-closed contract: if `parsed` is not an object or lacks the core
+ * grading signals (a boolean qualityDegraded AND a numeric overallScore AND a
+ * known riskLevel), we DISTRUST it entirely and return the supplied
+ * fail-closed fallback (which marks the letter degraded/unverified). Valid
+ * JSON of the wrong shape is therefore treated exactly like unparseable JSON —
+ * never as a clean pass. When the core signals are present, array fields are
+ * defensively normalized to `string[]` so downstream `.map()` calls cannot
+ * throw on a missing/garbage field.
+ */
+export function normalizeVettingReport(
+  parsed: unknown,
+  fallback: VettingReport,
+): VettingReport {
+  if (!parsed || typeof parsed !== "object") return { ...fallback };
+  const p = parsed as Record<string, unknown>;
+
+  const hasCoreSignals =
+    typeof p.qualityDegraded === "boolean" &&
+    typeof p.overallScore === "number" &&
+    typeof p.riskLevel === "string" &&
+    VALID_RISK_LEVELS.has(p.riskLevel);
+
+  if (!hasCoreSignals) return { ...fallback };
+
+  return {
+    riskLevel: p.riskLevel as VettingReport["riskLevel"],
+    qualityDegraded: p.qualityDegraded as boolean,
+    jurisdictionIssues: toStringArray(p.jurisdictionIssues),
+    citationsFlagged: toStringArray(p.citationsFlagged),
+    factualIssuesFound: toStringArray(p.factualIssuesFound),
+    overallScore: p.overallScore as number,
+    summary: typeof p.summary === "string" ? p.summary : "",
+    recommendations: toStringArray(p.recommendations),
+  };
+}
+
 // ═══════════════════════════════════════════════════════
 // LANGGRAPH NODE: vetting
 // Performs quality vetting on the assembled letter.
@@ -339,9 +385,15 @@ ${researchSummary}`;
   let vettingReport: VettingReport;
   try {
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-    vettingReport = jsonMatch
-      ? (JSON.parse(jsonMatch[0]) as VettingReport)
-      : { ...PARSE_FAILURE_REPORT };
+    const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as unknown) : null;
+    // Shape-validate BEFORE trusting the object. Valid JSON of the WRONG shape
+    // (e.g. the model returns `{"verdict":"ok"}`) would otherwise pass the
+    // unchecked cast, leave required array fields undefined, and make the
+    // `.jurisdictionIssues.map(...)` calls below throw — which withErrorRecovery
+    // swallows into currentStage="error", and routeAfterVetting then finalizes
+    // the letter as CLEAN (qualityDegraded=false, no warning). That is the
+    // fail-open we must prevent: an unvettable letter must finalize DEGRADED.
+    vettingReport = normalizeVettingReport(parsed, PARSE_FAILURE_REPORT);
   } catch {
     vettingReport = { ...PARSE_FAILURE_REPORT };
   }
