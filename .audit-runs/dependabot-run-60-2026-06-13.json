@@ -1,0 +1,57 @@
+{
+  "run": 60,
+  "date": "2026-06-13",
+  "source_pr": 205,
+  "source_branch": "claude/intelligent-gates-93rm28",
+  "merged_pr": null,
+  "merged_at": null,
+  "investigator": "claude-code-automated-routine",
+  "audit_result": {
+    "native_dependabot_prs": 0,
+    "human_audit_prs_open": 20,
+    "pnpm_audit_before": "0 vulnerabilities",
+    "pnpm_audit_after": "0 vulnerabilities",
+    "packages_upgraded": 0,
+    "typescript_check": "clean"
+  },
+  "security_advisories_fixed": [],
+  "packages_upgraded": [],
+  "deferred_packages": [
+    { "name": "@types/express", "current": "4.17.21", "latest": "5.0.6", "reason": "v5 types require Express 5 runtime; breaks TypeScript with v4" },
+    { "name": "@types/node", "current": "^24.13.1", "latest": "25.9.3", "reason": "Node 25 types on Node 22 runtime causes false type-safety" },
+    { "name": "express", "current": "4.22.2", "latest": "5.2.1", "reason": "Named wildcards change, res.redirect() flip, req.body breaking — needs codemod branch" },
+    { "name": "pnpm", "current": "10.34.1", "latest": "11.6.0", "reason": "Config moves to pnpm-workspace.yaml, env vars renamed, SQLite store rebuild" },
+    { "name": "puppeteer", "current": "24.43.1", "latest": "25.1.0", "reason": "executablePath() sync→async breaks server/pdfGenerator.ts; ESM-only" },
+    { "name": "typescript", "current": "5.9.3", "latest": "6.0.3", "reason": "9 default changes, missing explicit target in tsconfig — dedicated branch needed" },
+    { "name": "wouter", "current": "3.7.1", "latest": "3.10.0", "reason": "Exact pin with active patches/wouter@3.7.1.patch — must port patch first" }
+  ],
+  "open_pr_decisions": [
+    { "pr": 205, "title": "chore(audit): Dependabot investigation run 59 — report + audit record (2026-06-13)", "decision": "SAFE_TO_MERGE", "reason": "Adds only .audit-runs/dependabot-run-59-2026-06-13.json — pure documentation, no code change" },
+    { "pr": 202, "title": "chore(deps): Dependabot audit Run 58 — @types/node 24.13.2, 0 advisories", "decision": "STALE", "reason": "Superseded by Run 59 (PR #204 merged)" },
+    { "pr": 201, "title": "chore(deps): Dependabot audit Run 57 — comprehensive dependency health report", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 200, "title": "docs: Dependabot audit Run 57 — 0 packages upgraded, 0 advisories", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 199, "title": "chore(deps): Dependabot audit Run 56 — 10 packages upgraded, 0 advisories", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 198, "title": "docs: Dependabot PR audit report — 2026-06-12", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 179, "title": "chore(deps): Dependency audit Run 55", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 178, "title": "chore(deps): Dependency audit Run 54", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 163, "title": "chore(deps): Dependabot audit run 43", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 162, "title": "chore(deps): Dependabot audit run 42", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 158, "title": "docs: Dependabot audit run 41", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 157, "title": "chore(deps): Dependabot audit run 39 — 5 advisories cleared", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 156, "title": "chore(deps): Dependabot audit run 40", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 155, "title": "chore(deps): Dependabot audit run 39 — 2026-06-09", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 154, "title": "chore(deps): Dependabot audit run 39 — all advisories cleared", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 152, "title": "chore(deps): Dependabot audit run 37 — 2026-06-09 v2", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 151, "title": "chore(deps): Dependabot audit run 37 — 2026-06-09 v1", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 150, "title": "chore(deps): Dependabot audit run 37 — brace-expansion + langsmith", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 148, "title": "docs: Dependabot audit run 36", "decision": "STALE", "reason": "Superseded by Run 59" },
+    { "pr": 146, "title": "docs: Dependabot audit run 35", "decision": "STALE", "reason": "Superseded by Run 59" }
+  ],
+  "ci": {
+    "vercel_agent_review": "N/A",
+    "failures": 0
+  },
+  "decision": "NO_CHANGES",
+  "notes": "All packages fully up-to-date. Only 7 deferred packages remain (all with documented blockers, unchanged since Run 58). pnpm audit clean. No native Dependabot bot PRs. 20 open human-authored audit PRs — all stale except PR #205 (Run 59 audit record, safe to merge).",
+  "superseded_prs": "146-204"
+}
