@@ -1,0 +1,74 @@
+{
+  "run": 59,
+  "date": "2026-06-13",
+  "source_pr": 204,
+  "source_branch": "claude/intelligent-gates-2vbsh9",
+  "merged_pr": 204,
+  "merged_at": "2026-06-13",
+  "investigator": "claude-code-automated-routine",
+  "audit_result": {
+    "native_dependabot_prs": 0,
+    "human_audit_prs_open": 22,
+    "pnpm_audit_before": "2 vulnerabilities (1 HIGH, 1 LOW)",
+    "pnpm_audit_after": "0 vulnerabilities",
+    "packages_upgraded": 18,
+    "typescript_check": "clean"
+  },
+  "security_advisories_fixed": [
+    {
+      "id": "GHSA-gv7w-rqvm-qjhr",
+      "severity": "HIGH",
+      "cvss": "8.1",
+      "package": "esbuild",
+      "affected_range": ">=0.17.0 <0.28.1",
+      "description": "Missing binary integrity verification in Deno module enables remote code execution via NPM_CONFIG_REGISTRY",
+      "fixed_in": "0.28.1",
+      "decision": "MERGED"
+    },
+    {
+      "id": "GHSA-g7r4-m6w7-qqqr",
+      "severity": "LOW",
+      "package": "esbuild",
+      "affected_range": ">=0.27.3 <0.28.1",
+      "description": "Arbitrary file read via path traversal in dev server on Windows (backslash normalization missing)",
+      "fixed_in": "0.28.1",
+      "decision": "MERGED"
+    }
+  ],
+  "packages_upgraded": [
+    { "name": "esbuild", "from": "0.28.0", "to": "0.28.1", "type": "patch", "security": true },
+    { "name": "@ai-sdk/anthropic", "from": "3.0.82", "to": "3.0.84", "type": "patch", "security": false },
+    { "name": "@ai-sdk/openai", "from": "3.0.69", "to": "3.0.71", "type": "patch", "security": false },
+    { "name": "@langchain/anthropic", "from": "1.4.0", "to": "1.4.1", "type": "patch", "security": false },
+    { "name": "@langchain/core", "from": "1.1.48", "to": "1.1.49", "type": "patch", "security": false },
+    { "name": "@langchain/langgraph", "from": "1.4.1", "to": "1.4.2", "type": "patch", "security": false },
+    { "name": "@tailwindcss/vite", "from": "4.3.0", "to": "4.3.1", "type": "patch", "security": false },
+    { "name": "tailwindcss", "from": "4.3.0", "to": "4.3.1", "type": "patch", "security": false },
+    { "name": "@tiptap/extension-highlight", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/extension-placeholder", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/extension-text-align", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/extension-underline", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/pm", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/react", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "@tiptap/starter-kit", "from": "3.26.0", "to": "3.26.1", "type": "patch", "security": false },
+    { "name": "ai", "from": "6.0.200", "to": "6.0.204", "type": "patch", "security": false },
+    { "name": "dompurify", "from": "3.4.9", "to": "3.4.10", "type": "patch", "security": false },
+    { "name": "stripe", "from": "22.2.0", "to": "22.2.1", "type": "patch", "security": false },
+    { "name": "lucide-react", "from": "1.17.0", "to": "1.18.0", "type": "minor", "security": false }
+  ],
+  "deferred_packages": [
+    { "name": "@types/express", "current": "4.17.21", "latest": "5.0.6", "reason": "v5 types require Express 5 runtime; breaks TypeScript with v4" },
+    { "name": "@types/node", "current": "^24.13.1", "latest": "25.9.3", "reason": "Node 25 types on Node 22 runtime causes false type-safety" },
+    { "name": "express", "current": "4.22.2", "latest": "5.2.1", "reason": "Named wildcards change, res.redirect() flip, req.body breaking — needs codemod branch" },
+    { "name": "pnpm", "current": "10.34.1", "latest": "11.6.0", "reason": "Config moves to pnpm-workspace.yaml, env vars renamed, SQLite store rebuild" },
+    { "name": "puppeteer", "current": "24.43.1", "latest": "25.1.0", "reason": "executablePath() sync→async breaks server/pdfGenerator.ts; ESM-only" },
+    { "name": "typescript", "current": "5.9.3", "latest": "6.0.3", "reason": "9 default changes, missing explicit target in tsconfig — dedicated branch needed" },
+    { "name": "wouter", "current": "3.7.1", "latest": "3.10.0", "reason": "Exact pin with active patches/wouter@3.7.1.patch — must port patch first" }
+  ],
+  "ci": {
+    "vercel_agent_review": "neutral",
+    "failures": 0
+  },
+  "decision": "MERGED",
+  "superseded_prs": "96-202"
+}
