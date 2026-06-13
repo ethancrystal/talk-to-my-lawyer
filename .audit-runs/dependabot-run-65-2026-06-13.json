@@ -1,0 +1,231 @@
+{
+  "run": 65,
+  "date": "2026-06-13",
+  "source_branch": "claude/intelligent-gates-4dissm",
+  "investigator": "claude-code-automated-routine",
+  "audit_result": {
+    "native_dependabot_prs": 0,
+    "human_audit_prs_open": 20,
+    "prs_assessed_this_run": 21,
+    "prs_merged_this_run": 1,
+    "prs_left_unmerged": 20,
+    "pnpm_audit_before": "0 vulnerabilities",
+    "pnpm_audit_after": "0 vulnerabilities",
+    "packages_upgraded": 0,
+    "typescript_check": "not run (no code changes)"
+  },
+  "security_advisories_fixed": [],
+  "packages_upgraded": [],
+  "pr_decisions": [
+    {
+      "pr": 210,
+      "title": "chore(audit): Dependabot investigation run 64 — report + audit record (2026-06-13)",
+      "decision": "MERGED",
+      "merge_method": "squash",
+      "merge_sha": "b9d4f10c333e08e59f6d13aa361d51e0539022f2",
+      "reason": "Docs-only — adds .audit-runs/dependabot-run-64-2026-06-13.json. 0 vulnerabilities, 0 native Dependabot PRs, 7 deferred packages unchanged. No code changes, no risk. Safe to merge."
+    },
+    {
+      "pr": 206,
+      "title": "chore(audit): Dependabot investigation run 60 — report + audit record (2026-06-13)",
+      "decision": "STALE",
+      "reason": "Superseded by PR #208 (merged in Run 63) — run 60 record is already in main."
+    },
+    {
+      "pr": 202,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59 (PR #204 merged)"
+    },
+    {
+      "pr": 201,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 200,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 199,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 198,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 179,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 178,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 163,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 162,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 158,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 157,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 156,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 155,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 154,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 152,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 151,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 150,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 148,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    },
+    {
+      "pr": 146,
+      "decision": "STALE",
+      "reason": "Superseded by Run 59"
+    }
+  ],
+  "deferred_packages": [
+    {
+      "name": "wouter",
+      "current": "3.7.1",
+      "latest": "3.10.0",
+      "reason": "Active patches/wouter@3.7.1.patch must be ported to 3.10.0 internals first"
+    },
+    {
+      "name": "@types/express",
+      "current": "4.17.21",
+      "latest": "5.0.6",
+      "reason": "v5 types require Express 5 runtime; breaks TypeScript with v4"
+    },
+    {
+      "name": "@types/node",
+      "current": "24.13.1",
+      "latest": "25.9.3",
+      "reason": "Node 25 types on Node 22 runtime causes false type-safety"
+    },
+    {
+      "name": "express",
+      "current": "4.22.2",
+      "latest": "5.2.1",
+      "reason": "Named wildcards change, res.redirect() flip — needs codemod branch"
+    },
+    {
+      "name": "pnpm",
+      "current": "10.34.1",
+      "latest": "11.6.0",
+      "reason": "Config moves to pnpm-workspace.yaml, env vars renamed"
+    },
+    {
+      "name": "puppeteer",
+      "current": "24.43.1",
+      "latest": "25.1.0",
+      "reason": "executablePath() sync→async breaks server/pdfGenerator.ts; ESM-only"
+    },
+    {
+      "name": "typescript",
+      "current": "5.9.3",
+      "latest": "6.0.3",
+      "reason": "9 default changes, missing explicit target in tsconfig — dedicated branch needed"
+    }
+  ],
+  "active_pnpm_overrides": [
+    {
+      "advisory": "GHSA-gv7w-rqvm-qjhr",
+      "severity": "HIGH",
+      "package": "esbuild <= 0.28.0",
+      "resolution": "0.28.1"
+    },
+    {
+      "advisory": "GHSA-g7r4-m6w7-qqqr",
+      "severity": "LOW",
+      "package": "esbuild <= 0.28.0",
+      "resolution": "0.28.1"
+    },
+    {
+      "advisory": "GHSA-5wm8-gmm8-39j9",
+      "severity": "HIGH",
+      "package": "fast-xml-builder <= 1.1.6",
+      "resolution": ">=1.1.7"
+    },
+    {
+      "advisory": "GHSA-45c6-75p6-83cc",
+      "severity": "MODERATE",
+      "package": "fast-xml-builder = 1.1.5",
+      "resolution": ">=1.1.7"
+    },
+    {
+      "advisory": "GHSA-q8mj-m7cp-5q26",
+      "severity": "MODERATE",
+      "package": "qs >= 6.11.1, <= 6.15.1",
+      "resolution": ">=6.15.2"
+    },
+    {
+      "advisory": "GHSA-jxxr-4gwj-5jf2",
+      "severity": "MODERATE",
+      "package": "brace-expansion <= 5.0.5",
+      "resolution": "5.0.6"
+    },
+    {
+      "advisory": "GHSA-3644-q5cj-c5c7",
+      "severity": "MODERATE",
+      "package": "langsmith <= 0.5.x",
+      "resolution": ">=0.6.0"
+    },
+    {
+      "advisory": "GHSA-p7fg-763f-g4gf",
+      "severity": "MODERATE",
+      "package": "@langchain/anthropic <= 1.3.x",
+      "resolution": "direct dep ^1.4.1"
+    }
+  ],
+  "ci": {
+    "pnpm_audit": "0 vulnerabilities (775 deps)",
+    "pnpm_outdated": "7 packages outdated (all deferred)",
+    "failures": 0
+  },
+  "decision": "NO_CHANGES",
+  "notes": "All packages fully up-to-date or deferred with documented blockers. pnpm audit clean (0 vulns, 775 deps). No native Dependabot bot PRs confirmed via GitHub API. PR #210 (run 64 audit record, docs-only) merged this run via squash (SHA b9d4f10). 20 stale audit PRs from runs 35-63 left unmerged — all superseded by run 64. Deferred packages unchanged since Run 59."
+}
