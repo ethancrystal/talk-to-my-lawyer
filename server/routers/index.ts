@@ -13,6 +13,7 @@ import { documentsRouter } from "./documents";
 import { blogRouter } from "./blog";
 import { templatesRouter } from "./templates";
 import { intakeFormTemplatesRouter } from "./intakeFormTemplates";
+import { organizationsRouter } from "./organizations";
 
 export const appRouter = router({
   system: systemRouter,
@@ -29,6 +30,7 @@ export const appRouter = router({
   blog: blogRouter,
   templates: templatesRouter,
   intakeFormTemplates: intakeFormTemplatesRouter,
+  organizations: organizationsRouter,
 });
 
 export type AppRouter = typeof appRouter;

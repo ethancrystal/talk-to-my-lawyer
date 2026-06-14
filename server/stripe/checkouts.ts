@@ -6,6 +6,13 @@ import { getStripe, getOrCreateStripeCustomer } from "./client";
 import { resolveStripeCoupon } from "./coupons";
 import { logger } from "../logger";
 import { getPlanConfig } from "../stripe-products";
+import {
+  TEAM_PRICE_PER_SEAT_CENTS,
+  TEAM_LETTERS_PER_SEAT,
+  TEAM_MIN_SEATS,
+  TEAM_MAX_SEATS,
+  TEAM_PLAN,
+} from "../../shared/pricing";
 
 // ─── Create Checkout Session (subscription/one-time plans) ───────────────────
 export async function createCheckoutSession(params: {
@@ -122,6 +129,82 @@ export async function createCheckoutSession(params: {
   const session = await stripe.checkout.sessions.create(sessionParams);
   if (!session.url) throw new Error("Stripe did not return a checkout URL");
   return { url: session.url, sessionId: session.id };
+}
+
+// ─── Team / Enterprise Seat Checkout (per-seat subscription) ─────────────────
+/**
+ * Creates a per-seat team subscription checkout. Stripe bills
+ * `TEAM_PRICE_PER_SEAT_CENTS × seats` monthly via line-item quantity; the
+ * provisioning webhook reads the seat quantity + plan_id="team" to create the
+ * organization with a pooled allowance of `seats × TEAM_LETTERS_PER_SEAT`.
+ *
+ * Seats are clamped to [TEAM_MIN_SEATS, TEAM_MAX_SEATS] server-side — the price
+ * and pool are entirely server-controlled (no client-supplied amounts), matching
+ * the existing checkout's anti-tampering posture.
+ */
+export async function createTeamCheckoutSession(params: {
+  userId: number;
+  email: string;
+  name?: string | null;
+  seats: number;
+  orgName: string;
+  origin: string;
+  returnTo?: string;
+}): Promise<{ url: string; sessionId: string; seats: number }> {
+  const { userId, email, name, origin, returnTo } = params;
+
+  const requestedSeats = Math.floor(Number(params.seats));
+  if (!Number.isFinite(requestedSeats)) {
+    throw new Error("Invalid seat count");
+  }
+  const seats = Math.min(TEAM_MAX_SEATS, Math.max(TEAM_MIN_SEATS, requestedSeats));
+
+  const orgName = (params.orgName ?? "").trim().slice(0, 200);
+  if (!orgName) throw new Error("Organization name is required");
+
+  const stripe = getStripe();
+  const customerId = await getOrCreateStripeCustomer(userId, email, name);
+
+  const sharedMetadata = {
+    user_id: userId.toString(),
+    plan_id: TEAM_PLAN.id,
+    seats: seats.toString(),
+    letters_per_seat: TEAM_LETTERS_PER_SEAT.toString(),
+    org_name: orgName,
+    customer_email: email,
+  };
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    client_reference_id: userId.toString(),
+    mode: "subscription",
+    payment_method_types: ["card"],
+    allow_promotion_codes: true,
+    metadata: sharedMetadata,
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `${TEAM_PLAN.name} plan — per seat`,
+            description: TEAM_PLAN.description,
+            metadata: { plan_id: TEAM_PLAN.id },
+          },
+          unit_amount: TEAM_PRICE_PER_SEAT_CENTS,
+          recurring: { interval: "month" },
+        },
+        quantity: seats,
+      },
+    ],
+    subscription_data: { metadata: sharedMetadata },
+    success_url: returnTo
+      ? `${origin}${returnTo}?team_success=true`
+      : `${origin}/subscriber/organization?team_success=true`,
+    cancel_url: `${origin}/pricing?team_canceled=true`,
+  });
+
+  if (!session.url) throw new Error("Stripe did not return a checkout URL");
+  return { url: session.url, sessionId: session.id, seats };
 }
 
 // ─── Letter Unlock Checkout ($X per letter) ──────────────────────────────────

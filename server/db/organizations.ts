@@ -9,6 +9,10 @@ import {
 } from "../../drizzle/schema";
 import { getDb } from "./core";
 
+// Re-export so callers (routers) can import the role type from the DAL barrel
+// rather than reaching into drizzle/schema directly.
+export type { OrganizationMemberRole } from "../../drizzle/schema";
+
 // ═══════════════════════════════════════════════════════
 // ORGANIZATION / TEAM DATA ACCESS
 //
@@ -275,4 +279,97 @@ export async function refundOrganizationLetter(
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, organizationId));
+}
+
+/** Look up an organization by its Stripe customer id (provisioning idempotency key). */
+export async function getOrganizationByStripeCustomerId(
+  stripeCustomerId: string
+): Promise<Organization | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [org] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.stripeCustomerId, stripeCustomerId))
+    .limit(1);
+  return org ?? null;
+}
+
+/**
+ * Idempotently provision (create or update) a team organization from a Stripe
+ * subscription. Keyed on stripeCustomerId so repeated webhook deliveries
+ * (created → updated → invoice.paid) converge on one org rather than spawning
+ * duplicates.
+ *
+ *  - First time: insert the org + enroll the buyer as owner (in a transaction).
+ *  - Subsequent: update seatsAllowed / lettersAllowed / plan to match the
+ *    current Stripe quantity, re-asserting owner membership. `resetUsage:true`
+ *    (renewal) also zeroes the pool's lettersUsed for the new period.
+ */
+export async function provisionTeamOrganization(input: {
+  ownerId: number;
+  name: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId?: string | null;
+  seats: number;
+  lettersAllowed: number;
+  plan?: string | null;
+  resetUsage?: boolean;
+}): Promise<Organization> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getOrganizationByStripeCustomerId(input.stripeCustomerId);
+
+  if (existing) {
+    const [updated] = await db
+      .update(organizations)
+      .set({
+        seatsAllowed: input.seats,
+        lettersAllowed: input.lettersAllowed,
+        plan: input.plan ?? existing.plan,
+        ...(input.resetUsage ? { lettersUsed: 0 } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(organizations.id, existing.id))
+      .returning();
+
+    // Re-assert owner membership (idempotent) in case it was ever removed.
+    await db
+      .insert(organizationMembers)
+      .values({
+        organizationId: existing.id,
+        userId: input.ownerId,
+        role: "owner",
+      })
+      .onConflictDoNothing();
+
+    return (updated ?? existing) as Organization;
+  }
+
+  return db.transaction(async (tx: any) => {
+    const [org] = await tx
+      .insert(organizations)
+      .values({
+        name: input.name,
+        ownerId: input.ownerId,
+        stripeCustomerId: input.stripeCustomerId,
+        plan: input.plan ?? "team",
+        seatsAllowed: input.seats,
+        lettersAllowed: input.lettersAllowed,
+        lettersUsed: 0,
+      })
+      .returning();
+
+    await tx
+      .insert(organizationMembers)
+      .values({
+        organizationId: org.id,
+        userId: input.ownerId,
+        role: "owner",
+      })
+      .onConflictDoNothing();
+
+    return org as Organization;
+  });
 }

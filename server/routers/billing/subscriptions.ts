@@ -20,8 +20,21 @@ import {
   getStripe,
   getOrCreateStripeCustomer,
 } from "../../stripe";
-import { createCheckoutSession } from "../../stripe/checkouts";
+import {
+  createCheckoutSession,
+  createTeamCheckoutSession,
+} from "../../stripe/checkouts";
+import { TEAM_MIN_SEATS, TEAM_MAX_SEATS } from "../../../shared/pricing";
 import { subscriberProcedure, getAppUrl } from "../_shared";
+
+/** Resolve a trustworthy origin from the request, never localhost in prod. */
+function resolveOrigin(req: any): string {
+  return (req.headers.origin && !String(req.headers.origin).includes("localhost")
+    ? req.headers.origin
+    : req.headers["x-forwarded-host"]
+      ? `https://${req.headers["x-forwarded-host"]}`
+      : "https://www.talk-to-my-lawyer.com") as string;
+}
 
 export const billingSubscriptionsRouter = router({
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
@@ -57,6 +70,27 @@ export const billingSubscriptionsRouter = router({
         returnTo: input.returnTo,
       });
       return result;
+    }),
+
+  createTeamCheckout: emailVerifiedProcedure
+    .input(
+      z.object({
+        orgName: z.string().trim().min(1).max(200),
+        seats: z.number().int().min(TEAM_MIN_SEATS).max(TEAM_MAX_SEATS),
+        returnTo: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await checkTrpcRateLimit("payment", `user:${ctx.user.id}`);
+      return createTeamCheckoutSession({
+        userId: ctx.user.id,
+        email: ctx.user.email ?? "",
+        name: ctx.user.name,
+        seats: input.seats,
+        orgName: input.orgName,
+        origin: resolveOrigin(ctx.req),
+        returnTo: input.returnTo,
+      });
     }),
 
   createBillingPortal: protectedProcedure.mutation(async ({ ctx }) => {

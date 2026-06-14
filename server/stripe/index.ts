@@ -21,6 +21,7 @@ export {
 } from "./subscriptions";
 export {
   createCheckoutSession,
+  createTeamCheckoutSession,
   createLetterUnlockCheckout,
   createRevisionConsultationCheckout,
   createTrialReviewCheckout,

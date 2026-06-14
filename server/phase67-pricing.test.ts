@@ -29,16 +29,24 @@ describe("Pricing constants", () => {
 });
 
 describe("PLANS configuration", () => {
-  it("has exactly 3 plans (one-time + 2 subscriptions)", () => {
-    // The $200 one_time_letter offer was added in commit 3ab0918 (surfaced via
-    // the /pricing special-offer popup, not the main grid). It joins the two
-    // subscription plans in the canonical PLANS map.
-    expect(Object.keys(PLANS)).toHaveLength(3);
+  it("has exactly 4 plans (one-time + 2 consumer subscriptions + team)", () => {
+    // one_time_letter ($200 special-offer popup) + monthly + yearly + the
+    // per-seat `team` plan (resolved by getPlanConfig for seat checkout +
+    // provisioning, but intentionally kept OUT of the public ALL_PLANS /
+    // PAID_PLANS grid — see phase82 guards).
+    expect(Object.keys(PLANS)).toHaveLength(4);
     expect(Object.keys(PLANS)).toEqual(
-      expect.arrayContaining(["one_time_letter", "monthly", "yearly"])
+      expect.arrayContaining(["one_time_letter", "monthly", "yearly", "team"])
     );
     // The deprecated legacy $299 single_letter must NOT be a live plan.
     expect(Object.keys(PLANS)).not.toContain("single_letter");
+  });
+
+  it("team plan is per-seat with a pooled per-seat allowance", () => {
+    expect(PLANS.team.isPerSeat).toBe(true);
+    expect(PLANS.team.interval).toBe("month");
+    expect(PLANS.team.price).toBeGreaterThan(0);
+    expect(PLANS.team.lettersAllowed).toBeGreaterThan(0);
   });
 
   describe("monthly plan", () => {
@@ -110,13 +118,14 @@ describe("getPlanConfig", () => {
 });
 
 describe("PLAN_LIST", () => {
-  it("has 3 plans", () => expect(PLAN_LIST).toHaveLength(3));
+  it("has 4 plans", () => expect(PLAN_LIST).toHaveLength(4));
 
-  it("includes all 3 plan IDs", () => {
+  it("includes all 4 plan IDs", () => {
     const ids = PLAN_LIST.map((p) => p.id);
     expect(ids).toContain("one_time_letter");
     expect(ids).toContain("monthly");
     expect(ids).toContain("yearly");
+    expect(ids).toContain("team");
     expect(ids).not.toContain("single_letter");
   });
 });

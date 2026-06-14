@@ -44,6 +44,47 @@ async function resolveSubscriptionUserId(sub: Stripe.Subscription): Promise<{
   return { userId, planId: meta.planId, customerId };
 }
 
+/**
+ * Seat count for a (team) subscription = the first recurring line item's
+ * quantity. Falls back to 1 so a malformed sub never yields a 0-seat org.
+ */
+function getSubscriptionSeatQuantity(sub: Stripe.Subscription): number {
+  const qty = sub.items?.data?.[0]?.quantity;
+  return typeof qty === "number" && qty > 0 ? qty : 1;
+}
+
+/**
+ * Provision (or re-sync) a team organization from a team subscription. Idempotent
+ * — keyed on the Stripe customer id — so created/updated/renewal events converge
+ * on a single org. `resetUsage` zeroes the pooled lettersUsed on a renewal cycle.
+ */
+async function provisionTeamFromSubscription(
+  sub: Stripe.Subscription,
+  ownerId: number,
+  customerId: string,
+  opts: { resetUsage?: boolean } = {}
+): Promise<void> {
+  const { provisionTeamOrganization } = await import("../../db/organizations");
+  const { teamLetterPool, TEAM_PLAN } = await import("../../../shared/pricing");
+  const seats = getSubscriptionSeatQuantity(sub);
+  const orgName =
+    (sub.metadata?.org_name ?? "").trim() || `${TEAM_PLAN.name} organization`;
+  await provisionTeamOrganization({
+    ownerId,
+    name: orgName,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: sub.id,
+    seats,
+    lettersAllowed: teamLetterPool(seats),
+    plan: "team",
+    resetUsage: opts.resetUsage === true,
+  });
+  stripeLogger.info(
+    { ownerId, customerId, seats, resetUsage: opts.resetUsage === true },
+    "[StripeWebhook] Team organization provisioned/synced"
+  );
+}
+
 export async function handleSubscriptionCreatedOrUpdated(
   event: Stripe.Event
 ): Promise<void> {
@@ -52,6 +93,18 @@ export async function handleSubscriptionCreatedOrUpdated(
 
   if (!userId) {
     stripeLogger.warn({ eventType: event.type }, "[StripeWebhook] could not resolve userId");
+    return;
+  }
+
+  // Team plan: provision the shared-pool ORGANIZATION instead of a per-user
+  // subscription. The buyer becomes the org owner, and resolveUserLetterScope
+  // then routes their (and every member's) letters through the org pool. We do
+  // NOT call activateSubscription here — team entitlement lives on the org row,
+  // not the user's personal subscription.
+  if (planId === "team") {
+    await provisionTeamFromSubscription(sub, userId, customerId, {
+      resetUsage: false,
+    });
     return;
   }
 
@@ -186,6 +239,23 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> 
   const { userId, planId, customerId } = await resolveSubscriptionUserId(sub);
 
   if (!userId) return;
+
+  // Team plan: the pooled allowance lives on the ORG row, so renewal resets the
+  // org pool (and re-syncs seats), not a personal subscription. Same
+  // billing_reason gate as the per-user path — only reset on a true new period.
+  if (planId === "team") {
+    const isNewPeriod =
+      invoice.billing_reason === "subscription_cycle" ||
+      invoice.billing_reason === "subscription_create";
+    await provisionTeamFromSubscription(sub, userId, customerId, {
+      resetUsage: isNewPeriod,
+    });
+    stripeLogger.info(
+      { userId, billingReason: invoice.billing_reason },
+      "[StripeWebhook] Team invoice paid (org pool synced)"
+    );
+    return;
+  }
 
   const period = getSubscriptionPeriod(sub);
 

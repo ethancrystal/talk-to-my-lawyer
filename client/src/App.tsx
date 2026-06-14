@@ -82,6 +82,7 @@ const TemplateGallery = lazyRetry(() => import("./pages/subscriber/TemplateGalle
 const MyLetters = lazyRetry(() => import("./pages/subscriber/MyLetters"));
 const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
 const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
+const Organization = lazyRetry(() => import("./pages/subscriber/Organization"));
 const Receipts = lazyRetry(() => import("./pages/subscriber/Receipts"));
 const Profile = lazyRetry(() => import("./pages/subscriber/Profile"));
 const IntakeFormTemplates = lazyRetry(() => import("./pages/subscriber/IntakeFormTemplates"));
@@ -265,6 +266,13 @@ function Router() {
         <ProtectedRoute allowedRoles={["subscriber"]}>
           <SuspenseFade fallback={<ReceiptsSkeleton />}>
             <Receipts />
+          </SuspenseFade>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/subscriber/organization">
+        <ProtectedRoute allowedRoles={["subscriber"]}>
+          <SuspenseFade fallback={<BillingSkeleton />}>
+            <Organization />
           </SuspenseFade>
         </ProtectedRoute>
       </Route>
