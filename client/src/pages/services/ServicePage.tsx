@@ -31,7 +31,9 @@ export default function ServicePage({ service }: { service: ServiceData }) {
       description: service.metaDescription,
       url: `https://www.talk-to-my-lawyer.com/services/${service.slug}`,
       provider: { "@type": "Organization", name: "Talk to My Lawyer" },
-      areaServed: "US",
+      // California-only service area — align with the home page LegalService
+      // schema and llms.txt rather than claiming nationwide ("US") coverage.
+      areaServed: { "@type": "AdministrativeArea", name: "California" },
       serviceType: "Legal Letter Drafting",
     },
     {

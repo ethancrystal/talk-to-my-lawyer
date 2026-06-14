@@ -5,18 +5,24 @@ import { logger } from "./logger";
 
 const BASE = "https://www.talk-to-my-lawyer.com";
 
-const LAST_UPDATED = new Date().toISOString().split("T")[0];
+// Stable, content-derived last-modified date for static marketing pages.
+// Deliberately NOT `new Date()` at boot: re-stamping every static URL to the
+// deploy timestamp on each release teaches crawlers that <lastmod> is
+// unreliable (everything always "changed today"), and Google then ignores the
+// signal. Bump this constant when static/service page copy materially changes.
+// Blog posts below keep their real per-row updatedAt/publishedAt instead.
+const STATIC_CONTENT_LAST_MODIFIED = "2026-06-14";
 
 const STATIC_URLS: { loc: string; changefreq: string; priority: string; lastmod: string }[] = [
-  { loc: "/", changefreq: "weekly", priority: "1.0", lastmod: LAST_UPDATED },
-  { loc: "/pricing", changefreq: "monthly", priority: "0.9", lastmod: LAST_UPDATED },
+  { loc: "/", changefreq: "weekly", priority: "1.0", lastmod: STATIC_CONTENT_LAST_MODIFIED },
+  { loc: "/pricing", changefreq: "monthly", priority: "0.9", lastmod: STATIC_CONTENT_LAST_MODIFIED },
   // /analyze removed from sitemap 2026-05-20 — Doc Analyzer disabled; route
   // now redirects to /. Avoids search engines indexing a redirect target.
-  { loc: "/faq", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
-  { loc: "/services", changefreq: "monthly", priority: "0.8", lastmod: LAST_UPDATED },
-  { loc: "/blog", changefreq: "weekly", priority: "0.8", lastmod: LAST_UPDATED },
-  { loc: "/terms", changefreq: "yearly", priority: "0.3", lastmod: LAST_UPDATED },
-  { loc: "/privacy", changefreq: "yearly", priority: "0.3", lastmod: LAST_UPDATED },
+  { loc: "/faq", changefreq: "monthly", priority: "0.8", lastmod: STATIC_CONTENT_LAST_MODIFIED },
+  { loc: "/services", changefreq: "monthly", priority: "0.8", lastmod: STATIC_CONTENT_LAST_MODIFIED },
+  { loc: "/blog", changefreq: "weekly", priority: "0.8", lastmod: STATIC_CONTENT_LAST_MODIFIED },
+  { loc: "/terms", changefreq: "yearly", priority: "0.3", lastmod: STATIC_CONTENT_LAST_MODIFIED },
+  { loc: "/privacy", changefreq: "yearly", priority: "0.3", lastmod: STATIC_CONTENT_LAST_MODIFIED },
 ];
 
 function escapeXml(str: string): string {
@@ -47,7 +53,7 @@ export function registerSitemapRoute(app: Express): void {
       }
 
       for (const slug of SERVICE_SLUGS) {
-        urls.push(urlEntry(`/services/${slug}`, "monthly", "0.7", LAST_UPDATED));
+        urls.push(urlEntry(`/services/${slug}`, "monthly", "0.7", STATIC_CONTENT_LAST_MODIFIED));
       }
 
       for (const post of blogPosts) {
