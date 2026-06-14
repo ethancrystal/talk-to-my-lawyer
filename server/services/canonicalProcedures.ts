@@ -19,6 +19,7 @@ import { logger } from "../logger";
 import { Anthropic } from "@anthropic-ai/sdk";
 import type { IntakeJson } from "../../shared/types";
 import { checkLetterSubmissionAllowed, incrementLettersUsed } from "../stripe";
+import { resolveUserLetterScope, consumeOrganizationLetter } from "../db/organizations";
 import {
   createCheckoutSession,
   createLetterUnlockCheckout,
@@ -50,37 +51,64 @@ export async function submitSubscriberIntakeProcedure(
   intakePayload: IntakeJson,
   letterType: string
 ) {
-  const entitlement = await checkLetterSubmissionAllowed(subscriberId);
-  if (!entitlement.allowed) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: entitlement.reason ?? "Submission not allowed",
-    });
-  }
+  // B2B team accounts: if the submitter belongs to an organization, letters are
+  // drawn from the org's SHARED pool, not the user's personal subscription. This
+  // is dormant for solo accounts (resolveUserLetterScope returns kind:"user"
+  // when the user has no membership row — i.e. everyone today), so the per-user
+  // path below is byte-for-byte unchanged for existing traffic.
+  const letterScope = await resolveUserLetterScope(subscriberId);
 
-  // Claim usage
-  if (entitlement.firstLetterFree) {
-    const claimed = await claimFreeTrialSlot(subscriberId);
-    if (!claimed)
+  let consumedOrganizationId: number | null = null;
+  let isFreeTrialSubmission = false;
+  let isPaidSubscriberSubmission = false;
+
+  if (letterScope.kind === "organization" && letterScope.organizationId != null) {
+    // Atomic conditional consume from the org pool — no over-spend under
+    // concurrency. Org members are always paid (no free-trial path for orgs).
+    const consumed = await consumeOrganizationLetter(letterScope.organizationId);
+    if (!consumed) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "Free slot already used",
+        message: "No letters remaining in your organization's plan",
       });
-  } else if (entitlement.subscription) {
-    const incremented = await incrementLettersUsed(subscriberId);
-    if (!incremented)
+    }
+    consumedOrganizationId = letterScope.organizationId;
+    isPaidSubscriberSubmission = true;
+  } else {
+    const entitlement = await checkLetterSubmissionAllowed(subscriberId);
+    if (!entitlement.allowed) {
       throw new TRPCError({
         code: "FORBIDDEN",
-        message: "No letters remaining in plan",
+        message: entitlement.reason ?? "Submission not allowed",
       });
+    }
+
+    // Claim usage
+    if (entitlement.firstLetterFree) {
+      const claimed = await claimFreeTrialSlot(subscriberId);
+      if (!claimed)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Free slot already used",
+        });
+    } else if (entitlement.subscription) {
+      const incremented = await incrementLettersUsed(subscriberId);
+      if (!incremented)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "No letters remaining in plan",
+        });
+    }
+
+    isFreeTrialSubmission = entitlement.firstLetterFree === true;
+    isPaidSubscriberSubmission =
+      Boolean(entitlement.subscription) && !isFreeTrialSubmission;
   }
 
   const submittedAt = new Date();
   const subscriberVisibleAt = new Date(
     submittedAt.getTime() + LETTER_HOLD_HOURS * 60 * 60 * 1000
   );
-  const isFreeTrialSubmission = entitlement.firstLetterFree === true;
-  const isPaidSubscriberSubmission = Boolean(entitlement.subscription) && !isFreeTrialSubmission;
 
   const result = await createLetterRequest({
     userId: subscriberId,
@@ -128,6 +156,9 @@ export async function submitSubscriberIntakeProcedure(
       isPreviewGatedSubmission: true,
       isFreeTrialSubmission,
       isPaidSubscriberSubmission,
+      // Set only for org-pool submissions, so a pipeline failure refunds the
+      // shared org pool rather than the user's personal subscription.
+      organizationId: consumedOrganizationId,
     },
   });
 

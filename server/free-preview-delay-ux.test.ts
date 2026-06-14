@@ -27,6 +27,19 @@ vi.mock("./queue", () => ({
   enqueueDraftPreviewReleaseJob: vi.fn().mockResolvedValue("release-job-id"),
 }));
 
+// The submit procedure now resolves org scope first; this suite tests the solo
+// free-preview path, so mock it to "user" scope (no org membership).
+vi.mock("./db/organizations", () => ({
+  resolveUserLetterScope: vi.fn().mockResolvedValue({
+    kind: "user",
+    organizationId: null,
+    organizationRole: null,
+    lettersAllowed: null,
+    lettersUsed: null,
+  }),
+  consumeOrganizationLetter: vi.fn().mockResolvedValue(null),
+}));
+
 const ROOT = join(__dirname, "..");
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), "utf8");
 
@@ -86,6 +99,9 @@ describe("free preview 24-hour delay UX", () => {
           isPreviewGatedSubmission: true,
           isFreeTrialSubmission: true,
           isPaidSubscriberSubmission: false,
+          // Solo/free-trial submission draws from the user's own quota, not an
+          // org pool — so no org id is threaded to the worker.
+          organizationId: null,
         },
       })
     );

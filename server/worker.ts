@@ -53,6 +53,7 @@ import {
   createNotification,
   decrementLettersUsed,
   refundFreeTrialSlot,
+  refundOrganizationLetter,
   updatePipelineRecord,
 } from "./db";
 import { LETTER_STATUS } from "../shared/types/letter";
@@ -208,6 +209,52 @@ async function runQueuedLangGraphPipeline(
   }
 }
 
+/**
+ * Refund the consumed letter usage after a pipeline failure. Single source of
+ * truth for all four worker failure paths so the org-pool / free-trial / per-user
+ * branches can never drift apart. Non-fatal: refund errors are logged (and sent
+ * to Sentry) but never rethrown, so they cannot prevent the letter from being
+ * marked pipeline_failed.
+ *
+ * Order matters: free-trial first (orgs have no free trial), then org pool
+ * (B2B shared allowance — refund the ORG, never the member's personal sub),
+ * then the solo per-user subscription.
+ */
+export async function refundLetterUsageOnFailure(
+  userId: number | undefined,
+  usageContext: RunPipelineJobData["usageContext"],
+  letterId: number
+): Promise<void> {
+  if (!userId || !usageContext?.shouldRefundOnFailure) return;
+  try {
+    if (usageContext.isFreeTrialSubmission) {
+      await refundFreeTrialSlot(userId);
+      logger.info(
+        `[Worker] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`
+      );
+    } else if (usageContext.organizationId) {
+      await refundOrganizationLetter(usageContext.organizationId);
+      logger.info(
+        `[Worker] Refunded 1 letter to org #${usageContext.organizationId} after pipeline failure on letter #${letterId}`
+      );
+    } else {
+      await decrementLettersUsed(userId);
+      logger.info(
+        `[Worker] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`
+      );
+    }
+  } catch (refundErr) {
+    logger.error(
+      { err: refundErr, letterId, userId, organizationId: usageContext.organizationId },
+      "[Worker] Failed to refund usage after pipeline failure"
+    );
+    captureServerException(refundErr, {
+      tags: { component: "worker", error_type: "usage_refund_failed" },
+      extra: { letterId, userId },
+    });
+  }
+}
+
 export async function processRunPipeline(
   data: RunPipelineJobData
 ): Promise<void> {
@@ -320,26 +367,7 @@ export async function processRunPipeline(
       // executionRoute switch, free-trial submissions could never reach the
       // refunding "simple" route below: a failed free-trial generation
       // permanently consumed the user's only trial slot.
-      if (userId && usageContext?.shouldRefundOnFailure) {
-        try {
-          if (usageContext.isFreeTrialSubmission) {
-            await refundFreeTrialSlot(userId);
-            logger.info(
-              `[Worker] Refunded free trial slot for user #${userId} after simple-pipeline failure on letter #${letterId}`
-            );
-          } else {
-            await decrementLettersUsed(userId);
-            logger.info(
-              `[Worker] Refunded letter credit for user #${userId} after simple-pipeline failure on letter #${letterId}`
-            );
-          }
-        } catch (refundErr) {
-          logger.error(
-            { err: refundErr, letterId, userId },
-            "[Worker] Failed to refund usage after new-user bypass failure"
-          );
-        }
-      }
+      await refundLetterUsageOnFailure(userId, usageContext, letterId);
       // Re-throw so pg-boss records the job as failed (retryLimit=0, so no
       // re-delivery / double-refund) and ops dashboards see the failure
       // instead of a silent success.
@@ -445,10 +473,7 @@ export async function processRunPipeline(
           result.error ?? "Simple pipeline failed",
           "pipeline"
         );
-        if (userId && usageContext?.shouldRefundOnFailure) {
-          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
-          else await decrementLettersUsed(userId);
-        }
+        await refundLetterUsageOnFailure(userId, usageContext, letterId);
         await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
         throw lastErr;
       }
@@ -471,10 +496,7 @@ export async function processRunPipeline(
         return;
       } catch (err) {
         lastErr = err;
-        if (userId && usageContext?.shouldRefundOnFailure) {
-          if (usageContext.isFreeTrialSubmission) await refundFreeTrialSlot(userId);
-          else await decrementLettersUsed(userId);
-        }
+        await refundLetterUsageOnFailure(userId, usageContext, letterId);
         await updateLetterStatus(letterId, LETTER_STATUS.pipeline_failed, { force: true });
         throw err;
       }
@@ -630,32 +652,7 @@ export async function processRunPipeline(
       }
     }
 
-    if (userId && usageContext?.shouldRefundOnFailure) {
-      try {
-        if (usageContext.isFreeTrialSubmission) {
-          await refundFreeTrialSlot(userId);
-          logger.info(
-            `[Worker] Refunded free trial slot for user #${userId} after pipeline failure on letter #${letterId}`
-          );
-        } else {
-          await decrementLettersUsed(userId);
-          logger.info(
-            `[Worker] Refunded 1 letter usage for user #${userId} after pipeline failure on letter #${letterId}`
-          );
-        }
-      } catch (refundErr) {
-        logger.error(
-          { err: refundErr },
-          "[Worker] Failed to refund usage after pipeline failure:"
-        );
-        captureServerException(refundErr, {
-          tags: {
-            component: "pipeline-worker",
-            error_type: "usage_refund_failed",
-          },
-        });
-      }
-    }
+    await refundLetterUsageOnFailure(userId, usageContext, letterId);
 
     try {
       const admins = await getAllUsers("admin");

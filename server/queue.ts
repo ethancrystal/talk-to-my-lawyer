@@ -117,6 +117,12 @@ export interface RunPipelineJobData {
     isFreeTrialSubmission: boolean;
     /** Active paid subscription at submission time: route through LangGraph pipeline. */
     isPaidSubscriberSubmission?: boolean;
+    /**
+     * When set, the submission consumed a letter from this organization's shared
+     * pool (B2B team account) rather than the user's personal subscription — so a
+     * failure must refund the ORG pool, not the user. Absent for solo accounts.
+     */
+    organizationId?: number | null;
   };
 }
 

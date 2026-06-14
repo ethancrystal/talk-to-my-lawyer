@@ -256,3 +256,23 @@ export async function consumeOrganizationLetter(
 
   return updated ?? null;
 }
+
+/**
+ * Refund one letter to an organization's shared pool (e.g. after a pipeline
+ * failure). Mirrors the per-user decrementLettersUsed: clamps at 0 so a refund
+ * can never push the pool negative.
+ */
+export async function refundOrganizationLetter(
+  organizationId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
+    .update(organizations)
+    .set({
+      lettersUsed: sql`GREATEST(${organizations.lettersUsed} - 1, 0)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, organizationId));
+}
