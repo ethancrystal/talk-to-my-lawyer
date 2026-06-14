@@ -23,21 +23,35 @@ import {
   MONTHLY_PRICE_CENTS,
   ONE_TIME_LETTER_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
+  TEAM_PLAN,
+  TEAM_PRICE_PER_SEAT_CENTS,
+  TEAM_LETTERS_PER_SEAT,
 } from "../shared/pricing";
 
 export {
   MONTHLY_PRICE_CENTS,
   ONE_TIME_LETTER_PRICE_CENTS,
   YEARLY_PRICE_CENTS,
+  TEAM_PRICE_PER_SEAT_CENTS,
 };
 
 export interface PlanConfig {
-  id: "monthly" | "yearly" | "one_time_letter";
+  id: "monthly" | "yearly" | "one_time_letter" | "team";
   name: string;
   description: string;
-  price: number; // in cents
+  /**
+   * Price in cents. For per-seat plans (interval "month" + isPerSeat) this is
+   * the PER-SEAT unit price; the checkout multiplies by the seat quantity.
+   */
+  price: number;
   interval: "one_time" | "month" | "year";
-  lettersAllowed: number; // finite, non-negative
+  /**
+   * Letters granted. For per-seat team plans this is PER SEAT — the org's
+   * pooled allowance is seats × lettersAllowed (see teamLetterPool).
+   */
+  lettersAllowed: number;
+  /** True for per-seat team/enterprise plans (Stripe line-item quantity = seats). */
+  isPerSeat?: boolean;
   badge?: string;
   features: string[];
 }
@@ -104,6 +118,20 @@ export const PLANS: Record<string, PlanConfig> = {
       "Priority support",
       "Cancel anytime",
     ],
+  },
+  // Team / Enterprise — per-seat subscription with a pooled allowance. Resolved
+  // by getPlanConfig for seat checkout + the provisioning webhook, but kept OUT
+  // of the public ALL_PLANS / PAID_PLANS grid (sales-led via a dedicated CTA).
+  team: {
+    id: "team",
+    name: TEAM_PLAN.name,
+    description: TEAM_PLAN.description,
+    price: TEAM_PRICE_PER_SEAT_CENTS, // PER SEAT — checkout multiplies by quantity
+    interval: "month",
+    lettersAllowed: TEAM_LETTERS_PER_SEAT, // PER SEAT — pool = seats × this
+    isPerSeat: true,
+    badge: "For Teams",
+    features: [...TEAM_PLAN.features],
   },
 };
 

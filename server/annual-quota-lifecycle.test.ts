@@ -64,6 +64,20 @@ vi.mock("./queue", () => ({
   enqueueDraftPreviewReleaseJob: vi.fn().mockResolvedValue("release-job-id"),
 }));
 
+// These tests exercise the per-user (solo) entitlement path. The submit
+// procedure now first resolves org scope; mock it to "user" so it takes the
+// unchanged per-user branch instead of hitting a real DB for org membership.
+vi.mock("./db/organizations", () => ({
+  resolveUserLetterScope: vi.fn().mockResolvedValue({
+    kind: "user",
+    organizationId: null,
+    organizationRole: null,
+    lettersAllowed: null,
+    lettersUsed: null,
+  }),
+  consumeOrganizationLetter: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("./sentry", () => ({
   captureServerException: vi.fn(),
   initServerSentry: vi.fn(),

@@ -89,6 +89,7 @@ vi.mock("./db", () => ({
   createNotification: vi.fn().mockResolvedValue(undefined),
   decrementLettersUsed: vi.fn().mockResolvedValue(undefined),
   refundFreeTrialSlot: vi.fn().mockResolvedValue(undefined),
+  refundOrganizationLetter: vi.fn().mockResolvedValue(undefined),
   updatePipelineRecord: vi.fn().mockResolvedValue(undefined),
   getDb: vi.fn().mockResolvedValue({}),
 }));
@@ -140,6 +141,7 @@ const {
   consumeIntermediateContent,
 } = await import("./pipeline");
 const { runSimplePipeline, runOpenAIDirectFallback } = await import("./pipeline/simple");
+const { refundLetterUsageOnFailure } = await import("./worker");
 const {
   acquirePipelineLock,
   releasePipelineLock,
@@ -149,6 +151,7 @@ const {
   getAllUsers,
   decrementLettersUsed,
   refundFreeTrialSlot,
+  refundOrganizationLetter,
 } = await import("./db");
 const { sendJobFailedAlertEmail } = await import("./email");
 const { enqueueDraftPreviewReleaseJob } = await import("./queue");
@@ -197,6 +200,56 @@ function makeMockJob(
 ): Pick<Job<PipelineJobData>, "id" | "data"> {
   return { id: "test-job-id", data };
 }
+
+describe("refundLetterUsageOnFailure — refund routing", () => {
+  beforeEach(() => {
+    vi.mocked(refundFreeTrialSlot).mockClear();
+    vi.mocked(decrementLettersUsed).mockClear();
+    vi.mocked(refundOrganizationLetter).mockClear();
+  });
+
+  const ctx = (extra: Record<string, unknown>) => ({
+    shouldRefundOnFailure: true as const,
+    isFreeTrialSubmission: false,
+    ...extra,
+  });
+
+  it("refunds the free-trial slot for a free-trial submission", async () => {
+    await refundLetterUsageOnFailure(USER_ID, ctx({ isFreeTrialSubmission: true }) as any, LETTER_ID);
+    expect(refundFreeTrialSlot).toHaveBeenCalledWith(USER_ID);
+    expect(decrementLettersUsed).not.toHaveBeenCalled();
+    expect(refundOrganizationLetter).not.toHaveBeenCalled();
+  });
+
+  it("refunds the ORG pool (not the user) when organizationId is set", async () => {
+    await refundLetterUsageOnFailure(USER_ID, ctx({ organizationId: 99 }) as any, LETTER_ID);
+    expect(refundOrganizationLetter).toHaveBeenCalledWith(99);
+    expect(decrementLettersUsed).not.toHaveBeenCalled();
+    expect(refundFreeTrialSlot).not.toHaveBeenCalled();
+  });
+
+  it("refunds the personal subscription for a solo paid submission", async () => {
+    await refundLetterUsageOnFailure(USER_ID, ctx({}) as any, LETTER_ID);
+    expect(decrementLettersUsed).toHaveBeenCalledWith(USER_ID);
+    expect(refundOrganizationLetter).not.toHaveBeenCalled();
+    expect(refundFreeTrialSlot).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when shouldRefundOnFailure is absent or there is no user", async () => {
+    await refundLetterUsageOnFailure(undefined, ctx({}) as any, LETTER_ID);
+    await refundLetterUsageOnFailure(USER_ID, undefined, LETTER_ID);
+    expect(refundFreeTrialSlot).not.toHaveBeenCalled();
+    expect(decrementLettersUsed).not.toHaveBeenCalled();
+    expect(refundOrganizationLetter).not.toHaveBeenCalled();
+  });
+
+  it("never throws when the underlying refund fails (non-fatal)", async () => {
+    vi.mocked(refundOrganizationLetter).mockRejectedValueOnce(new Error("db down"));
+    await expect(
+      refundLetterUsageOnFailure(USER_ID, ctx({ organizationId: 5 }) as any, LETTER_ID)
+    ).resolves.toBeUndefined();
+  });
+});
 
 describe("processRunPipeline — lock behaviour", () => {
   beforeEach(() => {

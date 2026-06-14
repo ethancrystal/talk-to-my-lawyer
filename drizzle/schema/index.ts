@@ -6,6 +6,7 @@ export * from "./constants";
 export * from "./users";
 export * from "./letters";
 export * from "./billing";
+export * from "./organizations";
 export * from "./notifications";
 export * from "./pipeline";
 export * from "./content";

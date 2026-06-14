@@ -106,6 +106,41 @@ export const PRICING = {
   },
 } as const;
 
+/**
+ * Team / Enterprise — per-seat subscription with a POOLED letter allowance.
+ *
+ * Billing model: a firm buys N seats; Stripe bills `pricePerSeat × N` monthly
+ * (line-item quantity = seats). The org's shared letter pool is
+ * `lettersPerSeat × N`, drawn down by any member (see resolveUserLetterScope /
+ * consumeOrganizationLetter). Per-seat rate is a volume discount off the $299
+ * solo monthly rate to incentivize team adoption.
+ *
+ * NOTE: `pricePerSeat` and `lettersPerSeat` are sensible defaults — confirm the
+ * final numbers as a business decision. The code structure (per-seat × quantity,
+ * pooled allowance) is independent of the exact figures; changing them is a
+ * one-line edit here. Intentionally NOT in ALL_PLANS / PAID_PLANS: the team tier
+ * is sales-led via a dedicated CTA, not a card in the public 2-plan grid.
+ */
+export const TEAM_PLAN = {
+  id: "team",
+  name: "Team",
+  pricePerSeat: 249, // $/seat/month — volume discount vs $299 solo
+  pricePerSeatDisplay: "$249",
+  period: "per seat / month",
+  lettersPerSeat: 4, // pooled across the whole org
+  minSeats: 2,
+  maxSeats: 100,
+  description:
+    "Shared letter pool for law firms and teams — per-seat billing, pooled monthly allowance, and centralized member administration.",
+  features: [
+    "Pooled letter allowance shared across the whole team",
+    "Per-seat billing — add or remove seats anytime",
+    "Centralized admin: invite & manage members",
+    "Every letter still attorney-reviewed & approved",
+    "Priority support",
+  ],
+} as const;
+
 /** All plans in display order (subscription-only) */
 export const ALL_PLANS = [
   PRICING.monthly,
@@ -135,3 +170,22 @@ export const MONTHLY_PRICE_CENTS = PRICING.monthly.price * 100;
 
 /** Yearly price in cents (for Stripe) */
 export const YEARLY_PRICE_CENTS = PRICING.yearly.price * 100;
+
+/** Team per-seat monthly price in cents (for Stripe line-item unit_amount). */
+export const TEAM_PRICE_PER_SEAT_CENTS = TEAM_PLAN.pricePerSeat * 100;
+
+/** Pooled letters granted per purchased seat (org pool = seats × this). */
+export const TEAM_LETTERS_PER_SEAT = TEAM_PLAN.lettersPerSeat;
+
+/** Seat bounds for a team subscription (validated server-side at checkout). */
+export const TEAM_MIN_SEATS = TEAM_PLAN.minSeats;
+export const TEAM_MAX_SEATS = TEAM_PLAN.maxSeats;
+
+/**
+ * Compute the pooled letter allowance for a team subscription of `seats` seats.
+ * Single source of truth for the seats → pool math used at checkout, in the
+ * provisioning webhook, and on renewal resets.
+ */
+export function teamLetterPool(seats: number): number {
+  return Math.max(0, Math.floor(seats)) * TEAM_LETTERS_PER_SEAT;
+}
