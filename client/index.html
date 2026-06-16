@@ -60,13 +60,31 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <!-- Site-level WebSite entity so search engines resolve the brand name and
+         can attach sitelinks. Served in the static shell so JS-blind crawlers
+         and AI answer bots receive it without executing the SPA bundle. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.talk-to-my-lawyer.com/#website",
+      "name": "Talk to My Lawyer",
+      "alternateName": "TTML",
+      "url": "https://www.talk-to-my-lawyer.com",
+      "inLanguage": "en-US",
+      "publisher": { "@id": "https://www.talk-to-my-lawyer.com/#organization" }
+    }
+    </script>
     <!-- Enhanced JSON-LD for AI Agents with Karish Law Firm -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "LegalService",
+      "@id": "https://www.talk-to-my-lawyer.com/#organization",
       "name": "Talk to My Lawyer",
       "url": "https://www.talk-to-my-lawyer.com",
+      "logo": "https://www.talk-to-my-lawyer.com/logo-main.png",
+      "image": "https://www.talk-to-my-lawyer.com/logo-main.png",
       "description": "Flat-fee attorney-reviewed demand letters, cease-and-desist letters, and pre-litigation correspondence for California clients. All letters drafted and reviewed by licensed California attorneys at Karish Law Firm.",
       "areaServed": "California",
       "provider": {

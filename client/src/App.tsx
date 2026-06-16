@@ -489,6 +489,7 @@ function Router() {
 const ORGANIZATION_JSONLD = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": "https://www.talk-to-my-lawyer.com/#organization",
   "name": "Talk to My Lawyer",
   "url": "https://www.talk-to-my-lawyer.com",
   "logo": "https://www.talk-to-my-lawyer.com/logo-main.png",
