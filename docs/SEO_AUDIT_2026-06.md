@@ -1,5 +1,84 @@
 # SEO Audit — talk-to-my-lawyer.com (June 2026)
 
+> **Re-verification — 2026-06-17 (scheduled routine).** See the
+> [§0 Re-verification](#0-re-verification--2026-06-17) section below for what
+> changed since the original audit. TL;DR: the live site is now confirmed
+> healthy (HTTP 200 on all public routes — the original P0 unknown is closed),
+> the original code-level fixes are confirmed shipped, Semrush is still gated,
+> and organic visibility is unchanged. No regressions; no action required.
+
+---
+
+## 0. Re-verification — 2026-06-17
+
+A scheduled re-run of this review. New, verified facts since the original audit:
+
+### Live-site health — original P0 #1 now CLOSED
+The original audit's top P0 ("confirm the live site serves to real crawlers" —
+the automated fetcher had returned 404s) is **resolved**. Direct fetches this
+run returned a clean 200 on every public route:
+
+| Route | Status | Content-Type | Size | Note |
+| --- | --- | --- | --- | --- |
+| `/` | 200 | text/html | ~178 KB | full rendered marketing page |
+| `/sitemap.xml` | 200 | application/xml | ~78 KB | large → many blog URLs published |
+| `/robots.txt` | 200 | text/plain | ~4.7 KB | search=yes / ai-train=no policy intact |
+| `/services/demand-letter` | 200 | text/html | ~57 KB | service page renders |
+| `/llms.txt` | 200 | text/plain | ~3.4 KB | answer-engine guidance served |
+| `/blog` | 200 | text/html | ~10 KB | index renders |
+
+WebFetch also rendered real homepage content (H1 "Stop handling legal letters
+alone.", 3-step flow, $200 / $299 / $2,400 pricing), so crawlers are being
+served real content. The earlier 404s were almost certainly transient
+bot-UA blocking, not downtime. Still confirm in GSC URL Inspection when
+convenient, but this is no longer an open worry.
+
+### Original code recommendations — confirmed SHIPPED
+- **#9 sitemap `lastmod`** → fixed: `STATIC_CONTENT_LAST_MODIFIED = "2026-06-14"`
+  constant in `server/sitemapRoute.ts` (no more re-stamp-to-deploy-time).
+- **#10 `areaServed` inconsistency** → fixed: `services/ServicePage.tsx` JSON-LD
+  now emits `{ "@type": "AdministrativeArea", name: "California" }`.
+- **#11 `Organization`/`WebSite` entity schema** → added: `client/index.html`
+  now ships a `WebSite` entity (`#website`, with `alternateName: "TTML"`) plus a
+  `LegalService` `#organization` node linking the Karish Law Firm provider.
+
+### Still open (unchanged — both need an external input, not code)
+- **#8 OG/social image** is still the ~28 KB square `logo-main.png` while the
+  Twitter card is `summary_large_image`. A 1200×630 branded banner would
+  meaningfully improve social/answer-engine previews and CTR. **Blocker:**
+  needs a design asset — not safe to auto-generate brand imagery unattended.
+  Once an asset exists, set it as `DEFAULT_IMAGE` in `server/spaRoutes.ts`, the
+  static OG/Twitter tags in `client/index.html`, and the per-service tags in
+  `services/ServicePage.tsx` (currently all three point at `logo-main.png`).
+- **`Organization` `sameAs`** is still absent. **Blocker:** needs the real
+  social/Karish profile URLs to be worth shipping.
+
+### Still gated
+- **Semrush MCP is not on the current plan** — calling it returns a
+  plan-upsell message, so authority score / keyword count / backlink numbers
+  still can't be pulled programmatically. (View plans:
+  https://www.semrush.com/mcp-access.) GSC remains the free first step.
+
+### Visibility — unchanged (still bottom of the curve)
+Brand + core-term searches this run still surface **only competitors**, not
+talk-to-my-lawyer.com. Useful fresh pricing benchmarks for positioning:
+
+| Competitor / benchmark | Flat fee | Signal |
+| --- | --- | --- |
+| LetterDash | $199 | cheapest direct competitor |
+| **Talk to My Lawyer** | **$299/mo · $200 single** | below attorney avg, above LetterDash |
+| Terms.law | $575 | includes draft lawsuit + certified mail |
+| JusticeDirect | flat fee | markets "500+ 5-star reviews" |
+| ContractsCounsel CA avg | ~$580 demand / ~$660 C&D | market reference |
+
+Takeaway is unchanged from the original audit: the constraint is **off-page
+authority + content + reviews**, not on-page implementation. JusticeDirect's
+"500+ reviews" line reinforces original recommendation #7 — seeding real
+reviews (+ review schema) is high-leverage for both CTR and trust.
+
+---
+
+
 > Scheduled review of all public pages: which SEO best practices are followed,
 > where the site sits on the visibility spectrum, and prioritized changes.
 >
