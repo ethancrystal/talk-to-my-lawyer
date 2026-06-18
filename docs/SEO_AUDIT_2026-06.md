@@ -1,11 +1,65 @@
 # SEO Audit — talk-to-my-lawyer.com (June 2026)
 
+> **Re-verification — 2026-06-18 (scheduled routine).** Latest re-run. No
+> material change since 2026-06-17: live site healthy, all code-level fixes
+> still shipped, Semrush still gated, organic visibility still bottom-of-curve
+> (brand + core-term SERPs owned entirely by competitors). One new edge-level
+> observation (Cloudflare Content-Signal now surfaced on `robots.txt`) recorded
+> below. No regressions; no code action required — the open levers remain
+> off-page (backlinks, content, GSC, reviews) plus the OG-banner / `sameAs`
+> items that need external assets. See [§0.1](#01-re-verification--2026-06-18).
+>
 > **Re-verification — 2026-06-17 (scheduled routine).** See the
 > [§0 Re-verification](#0-re-verification--2026-06-17) section below for what
 > changed since the original audit. TL;DR: the live site is now confirmed
 > healthy (HTTP 200 on all public routes — the original P0 unknown is closed),
 > the original code-level fixes are confirmed shipped, Semrush is still gated,
 > and organic visibility is unchanged. No regressions; no action required.
+
+---
+
+## 0.1. Re-verification — 2026-06-18
+
+Daily scheduled re-run. Cross-checked the same surfaces as prior runs.
+
+**Live-site health — still good.** `https://www.talk-to-my-lawyer.com/robots.txt`
+served **200** with the intended policy intact (`search=yes`, `ai-train=no`;
+training-only AI crawlers blocked, search + retrieval/answer bots allowed).
+As in the original audit, the WebFetch user-agent got **404** on `/` and
+`/sitemap.xml` while `/robots.txt` on the *same host* served 200 — that pattern
+is Cloudflare bot-UA blocking of the fetcher, not downtime (allowlisted crawlers
+such as Googlebot are unaffected). Confirm in GSC URL Inspection when convenient.
+
+**New (edge-level): Cloudflare Content-Signal layer.** The live `robots.txt`
+now also surfaces Cloudflare's **Content-Signal** directives (`search=yes`,
+`ai-train=no`, AI-input unspecified). This is *not* in the committed
+`client/public/robots.txt` — Cloudflare is injecting/overlaying it at the edge.
+It is **consistent** with our intended policy, so no action needed; recorded
+here so a future run doesn't mistake it for a config drift or an unexpected
+third-party change.
+
+**Semrush — still gated.** `overview_research` again returned the plan-upsell
+message (current plan has no MCP access), so authority score / keyword count /
+backlink numbers still can't be pulled programmatically. GSC remains the free
+first step. View plans: https://www.semrush.com/mcp-access.
+
+**Visibility — unchanged (still bottom of the curve).** A fresh brand + core-term
+search (`"talk to my lawyer" attorney drafted demand letter cease and desist
+California flat fee`) again surfaced **only competitors** — talk-to-my-lawyer.com
+did not appear on the page. Current competitive pricing benchmarks (unchanged
+shape from the 2026-06-17 table): LetterDash still the cheapest direct competitor
+at **$199** flat; ContractsCounsel pegs the CA cease-and-desist average around
+**$660**; per-firm flat fees range ~$199 → $2,000–$5,000 for complex matters.
+Our $200 single / $299-mo positioning remains below the attorney average and
+just above LetterDash — a defensible value wedge, but it needs authority +
+reviews to be *findable*.
+
+**Bottom line (unchanged):** the constraint is off-page authority, content
+depth, and reviews — not on-page implementation. Highest-ROI work is still:
+wire up GSC, earn links (starting with `karishlawfirm.com` → topical relevance),
+publish CA-specific long-tail content steadily, seed real reviews (+ review
+schema), and — once a design asset exists — ship the 1200×630 OG banner and the
+`Organization` `sameAs` profile links. No new code change was warranted this run.
 
 ---
 
