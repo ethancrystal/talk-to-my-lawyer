@@ -3,6 +3,8 @@ import { type ServiceSlug } from "@shared/serviceSlugs";
 
 const SITE_ORIGIN = "https://www.talk-to-my-lawyer.com";
 const DEFAULT_IMAGE = `${SITE_ORIGIN}/logo-main.png`;
+const DEFAULT_IMAGE_ALT =
+  "Talk to My Lawyer - attorney-drafted, attorney-reviewed legal letters";
 
 export interface SeoBlogPost {
   slug?: string;
@@ -59,9 +61,13 @@ const PUBLIC_ROUTE_SEO: Record<string, Omit<RouteSeo, "canonical">> = {
     description:
       "Get attorney-drafted legal letters in minutes - flat fee, no hourly billing. Demand letters, cease and desist, breach of contract, and more. Your first letter is completely free.",
     robots: INDEX_ROBOTS,
-    ogTitle: "Talk to My Lawyer - Professional Legal Letters",
+    // Keyword-rich social/answer-engine card. Previously generic ("Professional
+    // Legal Letters"), which wasted the og:title on a non-keyword phrase even
+    // though the <title> is keyword-optimized. Social shares and AI answer
+    // engines surface og:* — keep them aligned with the indexed keywords.
+    ogTitle: "Attorney-Drafted Legal Letters - Demand & Cease and Desist",
     ogDescription:
-      "Get professional, attorney-reviewed legal letters in minutes. Your first letter is free.",
+      "Attorney-drafted, attorney-reviewed legal letters in minutes - flat fee, no hourly billing. Demand letters, cease and desist, breach of contract. Your first letter is free.",
     ogType: "website",
   },
   "/pricing": {
@@ -774,12 +780,14 @@ function stripManagedHeadTags(html: string): string {
     .replace(/<meta\s+property=["']og:type["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+property=["']og:url["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+property=["']og:image["'][^>]*>\s*/gi, "")
+    .replace(/<meta\s+property=["']og:image:alt["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+property=["']article:published_time["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+property=["']article:modified_time["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+name=["']twitter:card["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+name=["']twitter:title["'][^>]*>\s*/gi, "")
     .replace(/<meta\s+name=["']twitter:description["'][^>]*>\s*/gi, "")
-    .replace(/<meta\s+name=["']twitter:image["'][^>]*>\s*/gi, "");
+    .replace(/<meta\s+name=["']twitter:image["'][^>]*>\s*/gi, "")
+    .replace(/<meta\s+name=["']twitter:image:alt["'][^>]*>\s*/gi, "");
 }
 
 export function injectSeoIntoHtml(
@@ -797,10 +805,12 @@ export function injectSeoIntoHtml(
     `<meta property="og:type" content="${seo.ogType}" />`,
     `<meta property="og:url" content="${escapeHtmlAttribute(seo.canonical)}" />`,
     `<meta property="og:image" content="${escapeHtmlAttribute(seo.ogImage ?? DEFAULT_IMAGE)}" />`,
+    `<meta property="og:image:alt" content="${escapeHtmlAttribute(DEFAULT_IMAGE_ALT)}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escapeHtmlAttribute(seo.ogTitle ?? seo.title)}" />`,
     `<meta name="twitter:description" content="${escapeHtmlAttribute(seo.ogDescription ?? seo.description)}" />`,
     `<meta name="twitter:image" content="${escapeHtmlAttribute(seo.ogImage ?? DEFAULT_IMAGE)}" />`,
+    `<meta name="twitter:image:alt" content="${escapeHtmlAttribute(DEFAULT_IMAGE_ALT)}" />`,
   ];
 
   if (seo.publishedTime) {
