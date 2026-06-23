@@ -113,17 +113,53 @@ function OrgConsole({
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
 
-  const invite = trpc.organizations.inviteMember.useMutation({
-    onSuccess: (res) => {
-      if (res.added) {
-        toast.success("Member added to your team");
-      } else {
-        toast.info("That person is already on your team");
+  const invitesQuery = trpc.organizations.listInvitations.useQuery(undefined, {
+    enabled: org.isAdmin,
+  });
+  const pendingInvites = invitesQuery.data?.invitations ?? [];
+
+  const invite = trpc.organizations.inviteByEmail.useMutation({
+    onSuccess: (res, vars) => {
+      switch (res.status) {
+        case "invited":
+          toast.success("Invitation sent");
+          setInviteEmail("");
+          invitesQuery.refetch();
+          utils.organizations.myOrganization.invalidate();
+          break;
+        case "invited_email_failed":
+          toast.warning("Invite created, but the email didn't send", {
+            description: "You can revoke it and try again.",
+          });
+          setInviteEmail("");
+          invitesQuery.refetch();
+          break;
+        case "already_member":
+          toast.info("They're already on your team");
+          break;
+        case "already_invited":
+          toast.info("They already have a pending invite");
+          break;
+        case "needs_seat":
+          if (
+            window.confirm(
+              `Your ${res.seatsAllowed} seat(s) are full. Add a seat at ${res.pricePerSeatDisplay}/mo (prorated) and send the invite?`
+            )
+          ) {
+            invite.mutate({ email: vars.email, role: vars.role, confirmAddSeat: true });
+          }
+          break;
       }
-      setInviteEmail("");
-      utils.organizations.myOrganization.invalidate();
     },
-    onError: (err) => toast.error("Could not add member", { description: err.message }),
+    onError: (err) => toast.error("Could not invite", { description: err.message }),
+  });
+
+  const revoke = trpc.organizations.revokeInvitation.useMutation({
+    onSuccess: () => {
+      toast.success("Invitation revoked");
+      invitesQuery.refetch();
+    },
+    onError: (err) => toast.error("Could not revoke", { description: err.message }),
   });
 
   const remove = trpc.organizations.removeMember.useMutation({
@@ -167,7 +203,7 @@ function OrgConsole({
               <Users className="h-5 w-5" /> Members ({members.length}/{org.seatsAllowed})
             </CardTitle>
             <CardDescription>
-              Invite teammates who already have a TTML account. They draw from the shared pool.
+              Invite teammates by email — they don't need an account yet. They draw from the shared pool.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -229,6 +265,35 @@ function OrgConsole({
                 ))
               )}
             </div>
+
+            {pendingInvites.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Pending invitations ({pendingInvites.length})
+                </p>
+                <div className="divide-y rounded-lg border">
+                  {pendingInvites.map((inv: any) => (
+                    <div key={inv.id} className="flex items-center justify-between p-3">
+                      <div>
+                        <div className="text-sm font-medium">{inv.email}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Invited as {inv.role} · awaiting acceptance
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={revoke.isPending}
+                        onClick={() => revoke.mutate({ invitationId: inv.id })}
+                        data-testid={`button-revoke-invite-${inv.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

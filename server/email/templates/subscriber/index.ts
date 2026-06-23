@@ -11,3 +11,4 @@ export { sendVerificationEmail } from "./verification";
 export { sendWelcomeEmail } from "./welcome";
 export { sendDraftReminderEmail } from "./draft-reminder";
 export { sendPaymentFailedEmail } from "./payment-failed";
+export { sendOrgInvitationEmail } from "./org-invitation";
