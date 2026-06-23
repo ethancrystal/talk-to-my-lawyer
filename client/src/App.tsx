@@ -83,6 +83,7 @@ const MyLetters = lazyRetry(() => import("./pages/subscriber/MyLetters"));
 const LetterDetail = lazyRetry(() => import("./pages/subscriber/LetterDetail"));
 const Billing = lazyRetry(() => import("./pages/subscriber/Billing"));
 const Organization = lazyRetry(() => import("./pages/subscriber/Organization"));
+const AcceptOrgInvite = lazyRetry(() => import("./pages/subscriber/AcceptOrgInvite"));
 const Receipts = lazyRetry(() => import("./pages/subscriber/Receipts"));
 const Profile = lazyRetry(() => import("./pages/subscriber/Profile"));
 const IntakeFormTemplates = lazyRetry(() => import("./pages/subscriber/IntakeFormTemplates"));
@@ -268,6 +269,13 @@ function Router() {
             <Receipts />
           </SuspenseFade>
         </ProtectedRoute>
+      </Route>
+      {/* Public: an invitee may not have an account yet — the page handles auth
+          internally and routes to signup/login (carrying ?next) as needed. */}
+      <Route path="/subscriber/accept-invite">
+        <SuspenseFade fallback={<BillingSkeleton />}>
+          <AcceptOrgInvite />
+        </SuspenseFade>
       </Route>
       <Route path="/subscriber/organization">
         <ProtectedRoute allowedRoles={["subscriber"]}>
