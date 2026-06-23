@@ -9,6 +9,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./users";
 
 // ═══════════════════════════════════════════════════════
@@ -44,6 +45,11 @@ export const organizations = pgTable(
       onDelete: "set null",
     }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+    // The active Stripe subscription id for this org's seat plan. Needed to
+    // adjust seat quantity (with proration) when a member is added beyond the
+    // current paid seats. Nullable/back-filled: the provisioning webhook sets it
+    // on subscription create/update; legacy rows fill in on their next event.
+    stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
     // Seat-based plan name (nullable until the org subscribes). The canonical
     // plan catalog lives in shared/pricing.ts; this is the org's chosen plan id.
     plan: varchar("plan", { length: 64 }),
@@ -92,3 +98,55 @@ export const organizationMembers = pgTable(
 
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
+
+// ─── TABLE: organization_invitations ────────────────────────────────────────
+// Pending email invitations to join an org. Lets an admin invite someone who
+// does NOT yet have a TTML account: the invitee receives an emailed link, signs
+// up / logs in, and is auto-joined. The raw token is emailed; only its SHA-256
+// HASH is stored here (so a DB leak can't be used to accept invites). Bound to
+// the invited email, single-use, time-limited.
+export const ORGANIZATION_INVITATION_STATUSES = [
+  "pending",
+  "accepted",
+  "revoked",
+  "expired",
+] as const;
+export type OrganizationInvitationStatus =
+  (typeof ORGANIZATION_INVITATION_STATUSES)[number];
+
+export const organizationInvitations = pgTable(
+  "organization_invitations",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    // Invited email (stored lowercased by the DAL). Acceptance requires the
+    // authenticated user's email to match this.
+    email: varchar("email", { length: 320 }).notNull(),
+    // SHA-256 hash of the single-use token; the raw token only lives in the link.
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    role: varchar("role", { length: 32 }).default("member").notNull(),
+    invitedByUserId: integer("invited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    status: varchar("status", { length: 16 }).default("pending").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Fast lookup on acceptance.
+    index("idx_org_invitations_token_hash").on(t.tokenHash),
+    index("idx_org_invitations_org_id").on(t.organizationId),
+    // At most one PENDING invite per (org, email) — prevents duplicate live
+    // invites while still allowing re-invite after accept/revoke/expire.
+    uniqueIndex("uq_org_invitations_pending")
+      .on(t.organizationId, t.email)
+      .where(sql`${t.status} = 'pending'`),
+  ]
+);
+
+export type OrganizationInvitation = typeof organizationInvitations.$inferSelect;
+export type InsertOrganizationInvitation =
+  typeof organizationInvitations.$inferInsert;

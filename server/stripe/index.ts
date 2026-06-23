@@ -14,6 +14,7 @@ export {
   getUserSubscription,
   activateSubscription,
   incrementLettersUsed,
+  updateTeamSeatQuantity,
   checkLetterSubmissionAllowed,
   hasActiveRecurringSubscription,
   hasEverSubscribed,

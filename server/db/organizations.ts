@@ -1,17 +1,30 @@
 import { and, eq, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import {
   organizations,
   organizationMembers,
+  organizationInvitations,
   users,
   type Organization,
   type OrganizationMember,
   type OrganizationMemberRole,
+  type OrganizationInvitation,
 } from "../../drizzle/schema";
 import { getDb } from "./core";
 
 // Re-export so callers (routers) can import the role type from the DAL barrel
 // rather than reaching into drizzle/schema directly.
 export type { OrganizationMemberRole } from "../../drizzle/schema";
+
+/**
+ * Hash an invitation token for storage/lookup. Only the hash is ever persisted;
+ * the raw token lives solely in the emailed accept link, so a DB leak cannot be
+ * used to accept invites. SHA-256 is fine here — the token is already
+ * high-entropy (it's not a low-entropy password needing a slow KDF).
+ */
+export function hashInvitationToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
 
 // ═══════════════════════════════════════════════════════
 // ORGANIZATION / TEAM DATA ACCESS
@@ -328,6 +341,11 @@ export async function provisionTeamOrganization(input: {
         seatsAllowed: input.seats,
         lettersAllowed: input.lettersAllowed,
         plan: input.plan ?? existing.plan,
+        // Back-fill / keep the subscription id current (needed for seat-quantity
+        // updates when inviting beyond paid seats).
+        ...(input.stripeSubscriptionId
+          ? { stripeSubscriptionId: input.stripeSubscriptionId }
+          : {}),
         ...(input.resetUsage ? { lettersUsed: 0 } : {}),
         updatedAt: new Date(),
       })
@@ -354,6 +372,7 @@ export async function provisionTeamOrganization(input: {
         name: input.name,
         ownerId: input.ownerId,
         stripeCustomerId: input.stripeCustomerId,
+        stripeSubscriptionId: input.stripeSubscriptionId ?? null,
         plan: input.plan ?? "team",
         seatsAllowed: input.seats,
         lettersAllowed: input.lettersAllowed,
@@ -371,5 +390,161 @@ export async function provisionTeamOrganization(input: {
       .onConflictDoNothing();
 
     return org as Organization;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// ORGANIZATION INVITATIONS (email invite → sign up → auto-join)
+// ═══════════════════════════════════════════════════════
+
+/** Create a pending invitation. `rawToken` is hashed for storage; caller emails the raw token. */
+export async function createInvitation(input: {
+  organizationId: number;
+  email: string;
+  rawToken: string;
+  role?: OrganizationMemberRole;
+  invitedByUserId: number;
+  expiresAt: Date;
+}): Promise<OrganizationInvitation> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .insert(organizationInvitations)
+    .values({
+      organizationId: input.organizationId,
+      email: input.email.trim().toLowerCase(),
+      tokenHash: hashInvitationToken(input.rawToken),
+      role: input.role ?? "member",
+      invitedByUserId: input.invitedByUserId,
+      status: "pending",
+      expiresAt: input.expiresAt,
+    })
+    .returning();
+  return row as OrganizationInvitation;
+}
+
+/** Look up an invitation by the (hashed) token. */
+export async function getInvitationByTokenHash(
+  tokenHash: string
+): Promise<OrganizationInvitation | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(organizationInvitations)
+    .where(eq(organizationInvitations.tokenHash, tokenHash))
+    .limit(1);
+  return row ?? null;
+}
+
+/** List pending invitations for an org. */
+export async function listPendingInvitations(
+  organizationId: number
+): Promise<OrganizationInvitation[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(organizationInvitations)
+    .where(
+      and(
+        eq(organizationInvitations.organizationId, organizationId),
+        eq(organizationInvitations.status, "pending")
+      )
+    );
+  return rows as OrganizationInvitation[];
+}
+
+/** Count members + pending invites against the org's seat allowance. */
+export async function countSeatsInUse(organizationId: number): Promise<number> {
+  const members = await getOrganizationMembers(organizationId);
+  const pending = await listPendingInvitations(organizationId);
+  return members.length + pending.length;
+}
+
+/** Revoke a pending invitation (scoped to the org so an admin can't revoke another org's invite). */
+export async function revokeInvitation(
+  organizationId: number,
+  invitationId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(organizationInvitations)
+    .set({ status: "revoked" })
+    .where(
+      and(
+        eq(organizationInvitations.id, invitationId),
+        eq(organizationInvitations.organizationId, organizationId),
+        eq(organizationInvitations.status, "pending")
+      )
+    );
+}
+
+export type AcceptInvitationResult =
+  | { ok: true; organizationId: number; role: OrganizationMemberRole }
+  | {
+      ok: false;
+      reason: "not_found" | "not_pending" | "expired" | "email_mismatch";
+    };
+
+/**
+ * Accept an invitation for an authenticated user. Validates (pending, not
+ * expired, email matches the authenticated user) then enrolls the user and marks
+ * the invite accepted — all in one transaction so a partial accept can't happen
+ * and the single-use flip is atomic.
+ */
+export async function acceptInvitation(input: {
+  rawToken: string;
+  userId: number;
+  userEmail: string;
+}): Promise<AcceptInvitationResult> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const tokenHash = hashInvitationToken(input.rawToken);
+
+  return db.transaction(async (tx: any) => {
+    const [invite] = await tx
+      .select()
+      .from(organizationInvitations)
+      .where(eq(organizationInvitations.tokenHash, tokenHash))
+      .limit(1);
+
+    if (!invite) return { ok: false, reason: "not_found" as const };
+    if (invite.status !== "pending")
+      return { ok: false, reason: "not_pending" as const };
+    if (new Date(invite.expiresAt).getTime() < Date.now()) {
+      await tx
+        .update(organizationInvitations)
+        .set({ status: "expired" })
+        .where(eq(organizationInvitations.id, invite.id));
+      return { ok: false, reason: "expired" as const };
+    }
+    // Bind acceptance to the invited email — a different signed-in user cannot
+    // consume someone else's invite even with the link.
+    if (invite.email.toLowerCase() !== input.userEmail.trim().toLowerCase()) {
+      return { ok: false, reason: "email_mismatch" as const };
+    }
+
+    await tx
+      .insert(organizationMembers)
+      .values({
+        organizationId: invite.organizationId,
+        userId: input.userId,
+        role: invite.role,
+      })
+      .onConflictDoNothing();
+
+    await tx
+      .update(organizationInvitations)
+      .set({ status: "accepted", acceptedAt: new Date() })
+      .where(eq(organizationInvitations.id, invite.id));
+
+    return {
+      ok: true as const,
+      organizationId: invite.organizationId,
+      role: invite.role as OrganizationMemberRole,
+    };
   });
 }

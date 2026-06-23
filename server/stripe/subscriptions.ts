@@ -101,6 +101,31 @@ export async function incrementLettersUsed(userId: number): Promise<boolean> {
   return result.length > 0;
 }
 
+/**
+ * Set the seat quantity on a team subscription, with proration. Used when an
+ * org admin invites a member beyond the currently-paid seats: the bill changes
+ * immediately. The provisioning webhook (customer.subscription.updated) then
+ * re-syncs the org's seatsAllowed / pool from the new quantity, so this writes
+ * Stripe only — no double-write to the org row here.
+ */
+export async function updateTeamSeatQuantity(
+  subscriptionId: string,
+  newQuantity: number
+): Promise<void> {
+  const stripe = getStripe();
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const itemId = sub.items?.data?.[0]?.id;
+  if (!itemId) {
+    throw new Error(
+      `Subscription ${subscriptionId} has no line item to update seat quantity`
+    );
+  }
+  await stripe.subscriptions.update(subscriptionId, {
+    items: [{ id: itemId, quantity: newQuantity }],
+    proration_behavior: "create_prorations",
+  });
+}
+
 // ─── Check if User Can Submit Letter ─────────────────────────────────────────
 export async function checkLetterSubmissionAllowed(
   userId: number
