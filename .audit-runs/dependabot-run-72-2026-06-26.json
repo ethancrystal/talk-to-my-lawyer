@@ -1,0 +1,153 @@
+{
+  "run": 72,
+  "date": "2026-06-26",
+  "source_branch": "claude/intelligent-gates-disdo9",
+  "investigator": "claude-code-automated-routine",
+  "audit_result": {
+    "native_dependabot_bot_prs": 0,
+    "dependabot_yml_configured": true,
+    "dependabot_yml_note": "dependabot.yml present and configured for npm, pip, docker, github-actions (weekly schedule) — but no bot PRs generated this cycle",
+    "open_audit_prs_total": 90,
+    "open_audit_prs_stale": 90,
+    "prs_merged_prior_run": 1,
+    "prior_run_merged_pr": "#445 (Run 71)",
+    "prior_run_merged_at": "2026-06-26T17:31:45Z",
+    "prs_assessed_this_run": 90,
+    "prs_merged_this_run": 0,
+    "prs_left_unmerged": 90,
+    "stale_pr_range": "#152 to #443 plus #446",
+    "stale_pr_reason": "All are documentation-only audit report PRs from prior automated sessions. All superseded by Run 71 (PR #445, merged). No code changes in any of them. Safe to close.",
+    "pnpm_audit": "0 vulnerabilities (786 dependencies) — carried from Run 71",
+    "packages_upgraded_this_run": 0,
+    "packages_upgraded_note": "19 packages were upgraded in Run 71 (PR #445, merged 2026-06-26T17:31:45Z). No new upgrades needed this cycle.",
+    "typescript_check": "clean (carried from Run 71)",
+    "test_suite": "1852/1861 — 6 pre-existing Supabase connection failures (unchanged)"
+  },
+  "security": {
+    "cves": 0,
+    "active_overrides": [
+      "esbuild (x2)",
+      "fast-xml-builder (x2)",
+      "qs",
+      "brace-expansion",
+      "langsmith",
+      "@langchain/anthropic"
+    ],
+    "override_note": "8 pnpm.overrides active from prior CVE-fix runs. All still valid."
+  },
+  "dependabot_pr_audit": {
+    "bot_prs_open": 0,
+    "explanation": "Native Dependabot bot PRs: 0. dependabot.yml is present and configured, but Dependabot has not filed any PRs this cycle. This is expected when all auto-updatable dependencies are already at the latest patch/minor version (Run 71 applied 19 updates).",
+    "stale_human_audit_prs": {
+      "count": 90,
+      "range": "PR #152 (2026-06-09) through PR #446 (2026-06-26)",
+      "decision": "ALL DEFERRED / STALE",
+      "reason": "Every open audit PR is a documentation-only report from a prior automated session. None contain new code changes. All are superseded by Run 71 (PR #445). Merging any of them would add duplicate audit JSON files at best and create merge conflicts at worst. Recommend bulk-closing via GitHub UI."
+    }
+  },
+  "packages_deferred_from_run_71": [
+    {
+      "name": "@anthropic-ai/sdk",
+      "from": "0.105.0",
+      "to": "0.106.0",
+      "type": "minor-0x",
+      "decision": "DEFER",
+      "reason": "0.x semver — ^0.105.0 range excludes 0.106.0 by design. Needs changelog review before manual bump."
+    },
+    {
+      "name": "ai (Vercel AI SDK)",
+      "from": "6.0.208",
+      "to": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "New streaming wire protocol, renamed exports, tool-call shape change — must upgrade atomically with @ai-sdk/* v4. Needs dedicated migration branch."
+    },
+    {
+      "name": "@ai-sdk/anthropic",
+      "from": "3.0.85",
+      "to": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Atomic upgrade required with ai v7 and @ai-sdk/openai v4."
+    },
+    {
+      "name": "@ai-sdk/openai",
+      "from": "3.0.74",
+      "to": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Atomic upgrade required with ai v7 and @ai-sdk/anthropic v4."
+    },
+    {
+      "name": "typescript",
+      "from": "5.9.3",
+      "to": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "strict: true now default, types: [] now default, legacy module options removed. Dedicated migration branch needed."
+    },
+    {
+      "name": "puppeteer",
+      "from": "24.43.1",
+      "to": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "executablePath()/defaultArgs() now async — breaks server/pdfGenerator.ts. ESM-only. Dedicated fix needed."
+    },
+    {
+      "name": "express",
+      "from": "4.22.2",
+      "to": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Named wildcard routing syntax changes, res.redirect() behaviour change — needs codemod migration branch."
+    },
+    {
+      "name": "@types/express",
+      "from": "4.17.21",
+      "to": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "v5 types require Express 5 runtime; breaks TypeScript with v4."
+    },
+    {
+      "name": "pnpm",
+      "from": "10.34.1",
+      "to": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Config migrated from package.json pnpm field to .npmrc only; store format changed to SQLite."
+    },
+    {
+      "name": "@types/node",
+      "from": "24.13.1",
+      "to": "26.0.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Node 26 types on Node 22 runtime; two major version jumps."
+    }
+  ],
+  "action_items": [
+    {
+      "priority": "low",
+      "action": "Bulk-close ~90 stale open audit PRs (#152–#443, #446)",
+      "reason": "All superseded by merged PR #445. Adds noise to PR list."
+    },
+    {
+      "priority": "medium",
+      "action": "Review @anthropic-ai/sdk 0.105.0 → 0.106.0 changelog",
+      "reason": "0.x package deferred — manual bump safe only after changelog review confirms no breaking changes."
+    },
+    {
+      "priority": "high",
+      "action": "Plan Vercel AI SDK v7 + @ai-sdk/* v4 atomic migration",
+      "reason": "Streaming protocol change requires coordinated upgrade of ai, @ai-sdk/anthropic, @ai-sdk/openai."
+    },
+    {
+      "priority": "high",
+      "action": "Plan TypeScript 6.0 migration branch",
+      "reason": "strict: true default requires audit of all tsconfig.json options and potential type fixes."
+    }
+  ],
+  "delta_from_run_71": "No new package upgrades. Run 71 applied 19 packages. This run confirms the baseline is stable: 0 CVEs, 0 bot PRs, 10 deferred majors unchanged. 90 stale audit PRs identified for bulk-close."
+}
