@@ -242,6 +242,36 @@ describe("SPA route metadata and 404 handling", () => {
     expect(html).toContain("attorney-reviewed demand letter");
   });
 
+  it("emits server-rendered Article + BreadcrumbList JSON-LD for blog posts", async () => {
+    const route = await resolveSpaRoute("/blog/test-post", {
+      getBlogPost: async slug => ({
+        slug,
+        title: "What should I do if a competitor sells knockoffs?",
+        excerpt: "A practical guide to stopping infringing knockoffs.",
+        content: "Body copy.",
+        metaDescription: "Stop knockoff sellers with legal letters.",
+        ogImageUrl: "https://cdn.example.com/knockoffs.png",
+        publishedAt: new Date("2026-05-14T12:00:00.000Z"),
+        updatedAt: new Date("2026-05-15T12:00:00.000Z"),
+      }),
+    });
+    const html = injectSeoIntoHtml(template, route);
+
+    // Structured data must be present in the server-rendered HTML (blog posts
+    // are excluded from the build-time prerender), so non-JS crawlers and AI
+    // answer engines receive it without executing the SPA bundle.
+    expect(html).toContain('<script type="application/ld+json">');
+    expect(html).toContain('"@type":"Article"');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+    expect(html).toContain(
+      '"@id":"https://www.talk-to-my-lawyer.com/blog/test-post"'
+    );
+    expect(html).toContain('"datePublished":"2026-05-14T12:00:00.000Z"');
+    expect(html).toContain('"dateModified":"2026-05-15T12:00:00.000Z"');
+    // Site-level schema in the static shell must be preserved, not stripped.
+    expect(route.seo.jsonLd?.length).toBe(2);
+  });
+
   it("injects published blog links into the blog index fallback", async () => {
     const route = await resolveSpaRoute("/blog", {
       getBlogPosts: async () => ({
