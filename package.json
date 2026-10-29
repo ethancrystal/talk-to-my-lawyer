@@ -71,7 +71,7 @@
     "dotenv": "^17.2.2",
     "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
-    "framer-motion": "^12.38.0",
+    "framer-motion": "^14.6.0",
     "google-auth-library": "^10.6.2",
     "lucide-react": "^0.453.0",
     "mammoth": "^1.12.0",
