@@ -1,0 +1,93 @@
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { X, Zap, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
+
+const YEARLY_BENEFITS = [
+  "8 letters per year included",
+  "Priority attorney review queue",
+  "Best value plan",
+];
+
+const MONTHLY_PLAN_IDS = ["monthly", "monthly_basic", "starter"];
+const SESSION_KEY = "upgrade_banner_dismissed";
+
+interface Props {
+  plan?: string | null;
+}
+
+export default function UpgradeBanner({ plan }: Props) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch (err) { console.warn("[UpgradeBanner] Failed to read dismiss state from sessionStorage:", err); return false; }
+  });
+
+  const checkoutMutation = trpc.billing.createCheckout.useMutation({
+    onSuccess: (data) => {
+      toast.info("Redirecting to checkout...");
+      window.open(data.url, "_blank");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to start checkout");
+    },
+  });
+
+  const handleDismiss = () => {
+    try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (err) { console.warn("[UpgradeBanner] Failed to persist dismiss to sessionStorage:", err); }
+    setDismissed(true);
+  };
+
+  const handleUpgrade = () => {
+    checkoutMutation.mutate({ planId: "yearly" });
+  };
+
+  if (dismissed || !plan || !MONTHLY_PLAN_IDS.includes(plan)) return null;
+
+  return (
+    <div className="relative bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 sm:p-5 text-white overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8 pointer-events-none" />
+      <div className="absolute right-12 bottom-0 w-20 h-20 bg-white/5 rounded-full translate-y-6 pointer-events-none" />
+
+      {/* Dismiss */}
+      <button
+        onClick={handleDismiss}
+        className="absolute top-3 right-3 text-white/60 hover:text-white transition-colors"
+        aria-label="Dismiss"
+      >
+        <X className="w-4 h-4" />
+      </button>
+
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pr-6">
+        {/* Icon + text */}
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap className="w-4 h-4 text-yellow-300" fill="currentColor" />
+            <span className="text-sm font-bold tracking-wide uppercase text-blue-100">Switch to Yearly & Save</span>
+          </div>
+          <p className="text-white/90 text-sm font-medium mb-2">
+            You're on Monthly — switch to Yearly for $2,400/yr and get 8 letters total.
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {YEARLY_BENEFITS.map((b) => (
+              <span key={b} className="flex items-center gap-1 text-xs text-blue-100">
+                <CheckCircle className="w-3 h-3 text-green-300 flex-shrink-0" />
+                {b}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <Button
+          size="sm"
+          className="bg-white text-blue-700 hover:bg-blue-50 font-semibold flex-shrink-0 shadow-md"
+          onClick={handleUpgrade}
+          disabled={checkoutMutation.isPending}
+        >
+          {checkoutMutation.isPending ? "Loading..." : "Switch to Yearly →"}
+        </Button>
+      </div>
+    </div>
+  );
+}

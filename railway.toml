@@ -1,0 +1,32 @@
+# railway.toml — Configuration for the TTML app service on Railway.
+#
+# MULTI-SERVICE DEPLOYMENT MODEL
+# ──────────────────────────────
+# This repo produces one Docker image with a PROCESS_TYPE entrypoint:
+#
+#   Service      │ PROCESS_TYPE env var │ Notes
+#   ─────────────┼──────────────────────┼──────────────────────
+#   ttml-app     │ web (default)        │ Receives HTTP traffic
+#   worker       │ worker               │ No domain needed
+#   migrate      │ migrate              │ One-shot per deploy
+#
+# Create three Railway services from the same repo. Set PROCESS_TYPE
+# as an env var on each service. Only the web service needs a domain
+# and health check.
+#
+# LEGACY SINGLE-CONTAINER MODE
+# ─────────────────────────────
+# Set PROCESS_TYPE=all to run migrate + worker + web in one container.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# No startCommand needed — docker-entrypoint.sh dispatches via PROCESS_TYPE env var
+# NOTE: healthcheckPath removed because this file is shared by all services
+# (web, worker, migrate). The migrate and worker services are not HTTP servers
+# and will fail healthchecks. Set healthcheckPath = /api/health on the
+# ttml-app (web) service ONLY via the Railway dashboard.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

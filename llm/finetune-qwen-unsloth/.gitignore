@@ -1,0 +1,55 @@
+# Unsloth / training outputs (large)
+outputs/
+model_output/
+*.gguf
+*.safetensors
+adapter_model*
+merged_model*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+unsloth_env/
+
+# Dataset artifacts (you can commit small seeds if you want, but large ones are gitignored)
+dataset.jsonl
+dataset_info.json
+fine-tune-datasets/
+
+# Logs and temp
+*.log
+wandb/
+tensorboard/
+runs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

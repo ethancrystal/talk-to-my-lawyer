@@ -1,0 +1,178 @@
+# Dependencies
+**/node_modules
+.pnpm-store/
+jspm_packages/
+
+# Build outputs
+dist/
+build/
+out/
+output/
+*.dist
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+
+# Environment variables
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.*.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+debug/
+.manus-logs/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+tmp/
+temp/
+temp-uploads/
+
+# Coverage and test output
+coverage/
+.nyc_output/
+.coverage/
+*.lcov
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Misc caches
+.npm
+.eslintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.cache/
+.parcel-cache
+.node_repl_history
+
+# Framework build outputs
+.next/
+.nuxt/
+.out
+.storybook-out
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.sql.bak
+*.sql.backup
+database/backups/
+
+# Sensitive credential files
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.pub
+secrets/
+.secrets/
+private/
+# Use extension-specific patterns to avoid matching source code files (e.g. auth-tokens.ts)
+*credentials*.json
+*credentials*.txt
+*credentials*.env
+*secret*.json
+*secret*.txt
+*secret*.env
+*.token
+*token*.json
+*token*.txt
+*token*.env
+!server/db/auth-tokens.ts
+!.env.example
+
+# Lock files — not committed in this repo
+package-lock.json
+yarn.lock
+
+# Local development overrides
+config.local.*
+local.config.*
+revert.md
+
+# Uploads and media (if stored locally)
+uploads/
+media/
+
+# ── Test files & artifacts ──────────────────────────────────────────────────
+*_test.py
+test-*.mjs
+test-output-*
+test_reports/
+test-pipeline-results.md
+
+# ── Playwright E2E test artifacts ──────────────────────────────────────────
+playwright-report/
+test-results/
+blob-report/
+
+# ── Agent / AI tooling ──────────────────────────────────────────────────────
+.agents/
+.claude/
+memory/
+session-*.md
+attached_assets/*.md
+
+# ── Infrastructure / deployment config ─────────────────────────────────────
+# These files often contain environment-specific secrets or tokens
+wrangler.toml
+cloudflare-worker/wrangler.toml
+worker/wrangler.toml
+workers/wrangler.toml
+
+# ── Local agent state & generated modules ───────────────────────────────────
+.local/
+worker/
+workers/
+
+# ── Generated lock files in subdirectories ──────────────────────────────────
+artifacts/mockup-sandbox/package-lock.json
+
+# System and Debug artifacts
+core.*
+*-debug*.png
+*-debug*.jpg

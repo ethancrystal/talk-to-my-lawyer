@@ -1,0 +1,206 @@
+/**
+ * Review Queue
+ *
+ * Shows only unclaimed letters (status = pending_review) that are available
+ * for any attorney or admin to claim. Once claimed, a letter moves to the
+ * attorney's personal Review Centre.
+ */
+import AppLayout from "@/components/shared/AppLayout";
+import StatusBadge from "@/components/shared/StatusBadge";
+import ReviewModal from "@/components/shared/ReviewModal";
+import { trpc } from "@/lib/trpc";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { FileText, Search, ArrowRight, Sparkles, AlertTriangle, Inbox } from "lucide-react";
+import { useState } from "react";
+import { LETTER_TYPE_CONFIG } from "../../../../shared/types";
+import { useReviewQueueRealtime } from "@/hooks/useLetterRealtime";
+import { useStaggerReveal, staggerStyle } from "@/hooks/useAnimations";
+
+// Letters that arrived in the queue within the last 24 hours are "New"
+const NEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+export default function ReviewQueue() {
+  const utils = trpc.useUtils();
+
+  // Supabase Realtime — instant queue updates when any letter status changes
+  useReviewQueueRealtime({
+    onAnyChange: () => {
+      void utils.review.queue.invalidate();
+      void utils.review.myClaimed.invalidate();
+    },
+    enabled: true,
+  });
+
+  // Only fetch pending_review (unclaimed) letters — the default
+  const { data: letters, isLoading } = trpc.review.queue.useQuery({}, {
+    refetchInterval: 15000, // Fallback polling if Realtime is unavailable
+  });
+
+  const [search, setSearch] = useState("");
+  const [selectedLetterId, setSelectedLetterId] = useState<number | null>(null);
+
+  const filtered = (letters ?? []).filter((l) =>
+    l.subject.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const letterVisible = useStaggerReveal(filtered.length, 50);
+
+  return (
+    <AppLayout breadcrumb={[{ label: "Review Queue" }]}>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Review Queue</h1>
+            <p className="text-sm text-muted-foreground">
+              Unclaimed letters awaiting an attorney.{" "}
+              {filtered.length > 0 && (
+                <span className="text-amber-600 font-medium">
+                  {filtered.length} letter{filtered.length !== 1 ? "s" : ""} pending
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            data-testid="input-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search letters..."
+            className="pl-9"
+          />
+        </div>
+
+        {/* List */}
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 bg-muted animate-pulse rounded-xl" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16">
+            <Inbox className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {search ? "No letters match your search." : "The queue is empty — no letters awaiting review."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((letter, idx) => {
+              const isNew =
+                Date.now() - new Date(letter.createdAt).getTime() < NEW_THRESHOLD_MS;
+
+              return (
+                <div
+                  key={letter.id}
+                  data-testid={`card-letter-${letter.id}`}
+                  onClick={() => setSelectedLetterId(letter.id)}
+                  style={staggerStyle(idx, letterVisible[idx])}
+                  className={`bg-card border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer ${
+                    isNew ? "border-amber-300 bg-amber-50/30" : "border-border"
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        isNew ? "bg-amber-100" : "bg-primary/10"
+                      }`}
+                    >
+                      <FileText
+                        className={`w-5 h-5 ${isNew ? "text-amber-600" : "text-primary"}`}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p
+                            data-testid={`text-subject-${letter.id}`}
+                            className="text-sm font-semibold text-foreground leading-tight"
+                          >
+                            {letter.subject}
+                          </p>
+                          {isNew && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              New
+                            </Badge>
+                          )}
+                          {letter.qualityDegraded && (
+                            <Badge
+                              data-testid={`badge-quality-degraded-${letter.id}`}
+                              className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-4 flex items-center gap-0.5"
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Degraded
+                            </Badge>
+                          )}
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {LETTER_TYPE_CONFIG[letter.letterType]?.label ?? letter.letterType}
+                        {letter.jurisdictionState && ` · ${letter.jurisdictionState}`}
+                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <StatusBadge
+                          status={letter.status}
+                          size="sm"
+                          data-testid={`status-badge-${letter.id}`}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(letter.createdAt).toLocaleDateString()}
+                        </span>
+                        {letter.priority && letter.priority !== "normal" && (
+                          <span
+                            className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                              letter.priority === "urgent"
+                                ? "bg-red-100 text-red-700"
+                                : letter.priority === "high"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {letter.priority.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Review Modal — with J/K queue navigation */}
+      {selectedLetterId !== null && (() => {
+        const currentIdx = filtered.findIndex((l) => l.id === selectedLetterId);
+        return (
+          <ReviewModal
+            letterId={selectedLetterId}
+            open={true}
+            onOpenChange={(open) => {
+              if (!open) setSelectedLetterId(null);
+            }}
+            onNext={
+              currentIdx < filtered.length - 1
+                ? () => setSelectedLetterId(filtered[currentIdx + 1].id)
+                : undefined
+            }
+            onPrev={
+              currentIdx > 0
+                ? () => setSelectedLetterId(filtered[currentIdx - 1].id)
+                : undefined
+            }
+          />
+        );
+      })()}
+    </AppLayout>
+  );
+}
