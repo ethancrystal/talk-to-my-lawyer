@@ -51,6 +51,7 @@ vi.mock("./db", () => ({
   getDb: vi.fn().mockImplementation(async () => makeChainableDb()),
   getUserById: vi.fn().mockImplementation(async () => mockUserRow),
   countCompletedLetters: vi.fn().mockImplementation(async () => mockCompletedCount),
+  isFreeLetterUsedFromSameIp: vi.fn().mockResolvedValue(false),
 }));
 
 import { checkLetterSubmissionAllowed } from "./stripe/subscriptions";

@@ -6,6 +6,7 @@ import {
   boolean,
   serial,
   index,
+  integer,
 } from "drizzle-orm/pg-core";
 import { userRoleEnum } from "./constants";
 
@@ -34,3 +35,18 @@ export const users = pgTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// One row per account: the client IP it signed up from. Used to stop one
+// network from opening several accounts to farm the first-letter-free offer.
+export const signupIps = pgTable("signup_ips", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  ip: varchar("ip", { length: 64 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  method: varchar("method", { length: 16 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_signup_ips_ip").on(t.ip),
+]);
+
+export type SignupIp = typeof signupIps.$inferSelect;

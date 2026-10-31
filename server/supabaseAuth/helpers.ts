@@ -17,6 +17,7 @@ import {
 } from "../email";
 import { captureServerException } from "../sentry";
 import { logger } from "../logger";
+import { getClientIp } from "../rateLimiter";
 
 // ─── Canonical Origin URL ──────────────────────────────────────────────────
 const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
@@ -190,6 +191,18 @@ export async function syncGoogleUser({
   invalidateUserCache(user.id);
 
   const dbUser = await db.getUserByOpenId(user.id);
+
+  // Log the signup IP for new Google accounts. Supabase has already created the
+  // auth user by now, so this can't refuse the signup — the free-letter check
+  // (isFreeLetterUsedFromSameIp) enforces the one-free-letter-per-IP rule.
+  if (dbUser && !existingUser) {
+    const ip = getClientIp(req);
+    if (ip !== "unknown") {
+      await db
+        .recordSignupIp({ userId: dbUser.id, ip, email: user.email, method: "google" })
+        .catch(err => logger.error({ err }, "[SupabaseAuth] Failed to record Google signup IP"));
+    }
+  }
 
   if (dbUser && dbUser.role === "employee" && (!existingUser || existingUser.role !== "employee")) {
     try {
