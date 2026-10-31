@@ -8,8 +8,10 @@
 #
 # Env: APP_URL (e.g. https://www.talk-to-my-lawyer.com), CRON_SECRET.
 #
-# The schedule -> jobs table below MUST mirror CRON_JOBS in server/cronScheduler.ts
-# (enforced by server/vercel-deploy.test.ts). "drain" is the queue drain endpoint.
+# Primary scheduling is Supabase pg_cron (supabase/migrations/20261031000100_pg_cron_triggers.sql);
+# this script backs the manual/fallback GitHub workflow. The schedule -> jobs table below MUST
+# mirror CRON_JOBS in server/cronScheduler.ts (enforced by server/vercel-deploy.test.ts).
+# "drain" is the queue drain endpoint.
 set -uo pipefail
 
 : "${APP_URL:?APP_URL is required}"

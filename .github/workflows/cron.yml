@@ -1,27 +1,28 @@
-name: Scheduled jobs
+name: Scheduled jobs (manual / fallback)
 
-# Vercel Hobby only allows daily cron jobs, so the frequent jobs are triggered
-# from here instead (best-effort: GitHub may delay or skip scheduled runs under
-# load). Vercel Cron in vercel.json is a daily backstop for the critical ones.
+# Scheduling is done by Supabase pg_cron (supabase/migrations/20261031000100_pg_cron_triggers.sql),
+# which is free, minute-level and more dependable than GitHub's best-effort cron. This workflow is
+# kept ONLY for manual runs (Actions -> Run workflow) and as a fallback scheduler.
+#
+# Do NOT enable the schedule below while pg_cron is active: every job would run twice.
+# To switch back to GitHub scheduling, `select cron.unschedule(jobid) from cron.job where
+# jobname like 'ttml-%';` in Supabase, then uncomment the schedule block.
 #
 # Required repository secrets:
 #   APP_URL      e.g. https://www.talk-to-my-lawyer.com
 #   CRON_SECRET  same value as the CRON_SECRET env var on the Vercel project
-#
-# Keep the schedules in sync with server/cronScheduler.ts and
-# scripts/trigger-cron.sh (server/vercel-deploy.test.ts enforces this).
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-    - cron: "*/15 * * * *"
-    - cron: "0 * * * *"
-    - cron: "30 * * * *"
-    - cron: "0 */6 * * *"
-    - cron: "0 3 * * *"
-    - cron: "0 4 * * *"
-    - cron: "0 2 * * 0"
-    - cron: "30 2 * * 0"
+  # schedule:
+  #   - cron: "*/5 * * * *"
+  #   - cron: "*/15 * * * *"
+  #   - cron: "0 * * * *"
+  #   - cron: "30 * * * *"
+  #   - cron: "0 */6 * * *"
+  #   - cron: "0 3 * * *"
+  #   - cron: "0 4 * * *"
+  #   - cron: "0 2 * * 0"
+  #   - cron: "30 2 * * 0"
   workflow_dispatch:
     inputs:
       job:

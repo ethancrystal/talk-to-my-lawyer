@@ -11,7 +11,7 @@ Vercel is the **only** supported production deployment. Railway, Cloudflare Work
 | Express + tRPC API | One Vercel function: `api/index.ts` → `createApp()` in `server/_core/app.ts` | `vercel.json` rewrites `/api/*`, `/health`, `/sitemap.xml` to it |
 | Letter pipeline (was the pg-boss worker) | Same function, started right after enqueue via `waitUntil` | `server/queueDrain.ts`, `server/queue.ts` (`kickDrain`) |
 | Scheduled jobs (was `node-cron`) | HTTP triggers `/api/internal/cron/:job` and `/api/internal/queue/drain` | `server/cronScheduler.ts` (registry), `server/cronRoutes.ts` |
-| Scheduler | GitHub Actions (frequent jobs) + Vercel Cron (daily backstop) | `.github/workflows/cron.yml`, `scripts/trigger-cron.sh`, `vercel.json` `crons` |
+| Scheduler | **Supabase `pg_cron` + `pg_net`** (all jobs) + Vercel Cron (daily backstop) | `supabase/migrations/20261031000100_pg_cron_triggers.sql`, `vercel.json` `crons`; GitHub workflow is manual/fallback only |
 | DB migrations | Production builds only | `scripts/vercel-build.sh` |
 
 Local development is unchanged: `pnpm dev` runs `server/_core/index.ts` (Vite + in-process
@@ -45,16 +45,26 @@ Local development is unchanged: `pnpm dev` runs `server/_core/index.ts` (Vite + 
    - `CRON_SECRET` — long random string. Vercel Cron sends it automatically as
      `Authorization: Bearer …`; GitHub Actions sends the same value (below). The
      `/api/internal/*` routes return **503 if it is unset**.
-   - `APP_URL` — public URL, e.g. `https://www.talk-to-my-lawyer.com`.
+   - `APP_BASE_URL` (and `APP_URL`, which a few modules still read) — public URL, e.g.
+     `https://www.talk-to-my-lawyer.com`.
    - Use the Supabase **pooler** URL for `DATABASE_URL` / `SUPABASE_DATABASE_URL`. Each
      function instance opens its own pool (default 3, pg-boss 2; override with
      `DB_POOL_MAX`, `PG_BOSS_POOL_MAX`).
    - Optional: `ALLOWED_ORIGIN_HOSTS`, `CORS_ALLOWED_ORIGINS` for extra preview hosts. The
      project's own Vercel hosts are allowed automatically from Vercel system env vars; there
      is deliberately no `*.vercel.app` wildcard.
-3. **GitHub repository secrets** — `APP_URL` and `CRON_SECRET` (same values as above) for
-   `.github/workflows/cron.yml`. Test with *Actions → Scheduled jobs → Run workflow* and
-   job `queue-backlog-alert`.
+3. **Scheduler (Supabase `pg_cron`)** — in the app's Supabase project, create two Vault
+   secrets once, then apply `supabase/migrations/20261031000100_pg_cron_triggers.sql`
+   (SQL editor or `supabase db push`):
+   ```sql
+   select vault.create_secret('https://www.talk-to-my-lawyer.com', 'ttml_app_url');
+   select vault.create_secret('<same value as CRON_SECRET on Vercel>', 'ttml_cron_secret');
+   ```
+   Verify: `select jobname, schedule from cron.job where jobname like 'ttml-%';` (12 rows), then
+   after a few minutes `select id, status_code, error_msg from net._http_response order by created desc limit 10;`
+   should show `200`s. Without the Vault secrets the trigger skips with a warning (no calls are made).
+   The GitHub workflow (`.github/workflows/cron.yml`) is manual-only; do **not** enable its schedule
+   while `pg_cron` is active or every job runs twice.
 4. **Stripe webhook** — point it at `https://<domain>/api/stripe/webhook`.
 5. **Domain** — add `talk-to-my-lawyer.com` / `www` to the Vercel project, then cut DNS over
    from Railway/Cloudflare. Decommission the Railway services and the Cloudflare Worker
@@ -70,9 +80,10 @@ migrations by hand: `pnpm run -s _build:migrate && node dist/migrate.js`.
 ## Adding or changing a scheduled job
 
 1. Add/modify the entry in `CRON_JOBS` (`server/cronScheduler.ts`).
-2. Add its schedule to the `case` table in `scripts/trigger-cron.sh` and, if it is a new
-   schedule, to `.github/workflows/cron.yml`.
-3. `server/vercel-deploy.test.ts` fails if these drift apart.
+2. Add a `cron.schedule('ttml-<job>', '<expr>', ...)` line to a new Supabase migration (and update
+   the original file if you are still pre-deploy), and the schedule to the `case` table in
+   `scripts/trigger-cron.sh`.
+3. `server/vercel-deploy.test.ts` fails if the registry, the pg_cron migration and the script drift apart.
 
 ## Operations
 

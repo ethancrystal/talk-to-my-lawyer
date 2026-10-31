@@ -464,7 +464,7 @@ Full details in [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md).
 
 - Client: static `dist/public` on the CDN; API: one function (`api/index.ts`) built from `server/_core/app.ts` (`createApp()`), shared with the local server in `server/_core/index.ts`.
 - No persistent process: the pg-boss worker is replaced by `server/queueDrain.ts` (kicked after enqueue via `waitUntil`, plus scheduled drains); `node-cron` is replaced by HTTP triggers `/api/internal/cron/:job` (registry in `server/cronScheduler.ts`, auth `CRON_SECRET`, fail-closed).
-- Scheduler: GitHub Actions (`.github/workflows/cron.yml`, `scripts/trigger-cron.sh`) because Hobby Vercel Cron is daily only; `vercel.json` crons are a daily backstop.
+- Scheduler: Supabase `pg_cron` + `pg_net` (`supabase/migrations/20261031000100_pg_cron_triggers.sql`, secrets in Vault) because Hobby Vercel Cron is daily only; `vercel.json` crons are a daily backstop; the GitHub workflow is manual/fallback only.
 - Migrations: `scripts/vercel-build.sh`, production builds only.
 - Hobby limits: 300 s function cap, 4.5 MB request body — see the doc.
 

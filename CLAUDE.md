@@ -139,7 +139,7 @@ Almost all client-server calls use tRPC v11. REST is **only** used for:
 
 **Pipeline jobs** are pg-boss jobs. On Vercel they are drained on demand by `server/queueDrain.ts` (kicked after enqueue; scheduled drain via `/api/internal/queue/drain`); `server/worker.ts` is the long-running consumer for local runs and supplies `processJob`. Do not call pipeline stages directly from tRPC routers.
 
-**Deployment is Vercel-only** — read [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) (Hobby limits: 300 s functions, daily Vercel Cron, 4.5 MB bodies). Scheduled jobs live in `CRON_JOBS` (`server/cronScheduler.ts`); keep `scripts/trigger-cron.sh` and `.github/workflows/cron.yml` in sync.
+**Deployment is Vercel-only** — read [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) (Hobby limits: 300 s functions, daily Vercel Cron, 4.5 MB bodies). Scheduled jobs live in `CRON_JOBS` (`server/cronScheduler.ts`); scheduling is Supabase `pg_cron` (`supabase/migrations/20261031000100_pg_cron_triggers.sql`) — keep it and `scripts/trigger-cron.sh` in sync with the registry (the GitHub workflow is manual-only).
 
 **Recursive learning** (`server/learning/`): attorney edits generate lessons stored in `pipeline_lessons`, injected into future AI prompts. Managed at `/admin/learning`.
 

@@ -175,15 +175,49 @@ describe("vercel.json", () => {
   });
 });
 
-describe("GitHub Actions scheduler parity", () => {
+describe("pg_cron scheduler parity", () => {
   const registry = readRegistry();
   const script = read("scripts/trigger-cron.sh");
   const workflow = read(".github/workflows/cron.yml");
+  const sql = read("supabase/migrations/20261031000100_pg_cron_triggers.sql");
+  const scheduleCalls = sql
+    .split("\n")
+    .filter(l => l.startsWith("select cron.schedule("));
 
-  it("workflow schedules every distinct registry schedule", () => {
-    for (const schedule of new Set(registry.map(j => j.schedule))) {
-      expect(workflow).toContain(`- cron: "${schedule}"`);
+  it("migration schedules every registry job at its exact cron expression and path", () => {
+    for (const j of registry) {
+      const line = scheduleCalls.find(l => l.includes(`'ttml-${j.name}'`));
+      expect(line, `no cron.schedule for ${j.name}`).toBeTruthy();
+      expect(line).toContain(`'${j.schedule}'`);
+      expect(line).toContain(`'/api/internal/cron/${j.name}'`);
     }
+  });
+
+  it("migration drains the queue every 5 minutes", () => {
+    const line = scheduleCalls.find(l => l.includes("'ttml-queue-drain'"));
+    expect(line).toContain("'*/5 * * * *'");
+    expect(line).toContain("'/api/internal/queue/drain'");
+  });
+
+  it("migration schedules nothing beyond the registry + drain", () => {
+    expect(scheduleCalls).toHaveLength(registry.length + 1);
+  });
+
+  it("keeps secrets out of the repo and the helper off the public API schema", () => {
+    expect(sql).toContain("vault.decrypted_secrets");
+    expect(sql).not.toMatch(/Bearer [A-Za-z0-9]{16,}/);
+    expect(sql).toContain("create schema if not exists ttml_cron");
+    expect(sql).toContain("revoke all on function ttml_cron.trigger(text, integer) from public, anon, authenticated");
+    expect(sql).toContain("security definer");
+  });
+
+  it("GitHub workflow has no ACTIVE schedule (it would double-run every job)", () => {
+    const active = workflow
+      .split("\n")
+      .filter(l => !l.trimStart().startsWith("#"))
+      .join("\n");
+    expect(active).not.toMatch(/^\s*schedule:/m);
+    expect(active).toContain("workflow_dispatch");
   });
 
   it("trigger script maps each schedule to exactly its registry jobs", () => {
