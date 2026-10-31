@@ -1,0 +1,39 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "bash scripts/vercel-build.sh",
+  "outputDirectory": "dist/public",
+  "build": {
+    "env": {
+      "PUPPETEER_SKIP_DOWNLOAD": "true"
+    }
+  },
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300,
+      "includeFiles": "attached_assets/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/health", "destination": "/api" },
+    { "source": "/health/details", "destination": "/api" },
+    { "source": "/sitemap.xml", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/internal/queue/drain", "schedule": "5 5 * * *" },
+    { "path": "/api/internal/cron/stale-pipeline-locks", "schedule": "20 5 * * *" },
+    { "path": "/api/internal/cron/free-preview-emails", "schedule": "35 5 * * *" },
+    { "path": "/api/internal/cron/paywall-emails", "schedule": "50 5 * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}

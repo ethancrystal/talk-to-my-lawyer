@@ -9,6 +9,7 @@ dns.setDefaultResultOrder("ipv4first");
 import { initServerSentry } from "./sentry";
 initServerSentry();
 
+import { pathToFileURL } from "node:url";
 import type { Job } from "pg-boss";
 import {
   QUEUE_NAME,
@@ -1114,7 +1115,16 @@ async function startWorker() {
   );
 }
 
-startWorker().catch(err => {
-  logger.error({ err: err }, "[Worker] Failed to start:");
-  process.exit(1);
-});
+// Only boot the long-running consumer when this file is the process entry point
+// (`tsx server/worker.ts` / `node dist/worker.js`). On Vercel the module is
+// bundled into the API function and imported by server/queueDrain.ts for
+// processJob(), so it must not start a worker there.
+const isEntryPoint =
+  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntryPoint) {
+  startWorker().catch(err => {
+    logger.error({ err: err }, "[Worker] Failed to start:");
+    process.exit(1);
+  });
+}

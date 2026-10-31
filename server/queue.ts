@@ -44,6 +44,10 @@ interface PgBossConstructorOptions {
   connectionString: string;
   ssl?: { rejectUnauthorized: boolean; ca?: string };
   schedule?: boolean;
+  /** Connection pool size for this pg-boss instance. */
+  max?: number;
+  /** Run the maintenance supervisor on a timer (disabled on serverless). */
+  supervise?: boolean;
 }
 
 interface PgBossCreateQueueOptions {
@@ -76,6 +80,19 @@ interface PgBossClient {
   getQueueStats(queueName: string): Promise<PgBossQueueStats | undefined>;
   findJobs<T = unknown>(queueName: string): Promise<Array<PgBossFoundJob<T>>>;
   cancel(queueName: string, id: string | string[]): Promise<void>;
+  /** Pull jobs on demand (used by the serverless drain instead of work()). */
+  fetch<T>(
+    queueName: string,
+    options?: { batchSize?: number }
+  ): Promise<Array<Job<T>>>;
+  complete(queueName: string, id: string | string[]): Promise<unknown>;
+  fail(
+    queueName: string,
+    id: string | string[],
+    data?: object | null
+  ): Promise<unknown>;
+  /** Run queue maintenance once (expire stuck jobs, archive, delete). */
+  supervise(queueName?: string): Promise<void>;
   work<T>(
     queueName: string,
     options: { localConcurrency?: number },
@@ -316,6 +333,15 @@ export async function getBoss(): Promise<PgBossClient> {
       connectionString,
       ssl: buildNodePostgresSslConfig(connectionString) as { rejectUnauthorized: boolean; ca?: string },
       schedule: false,
+      // Serverless: every function instance opens its own pool, so keep it
+      // tiny, and run maintenance on demand (drainPipelineQueue) rather than
+      // from a per-instance timer.
+      ...(process.env.VERCEL
+        ? {
+            max: parseInt(process.env.PG_BOSS_POOL_MAX ?? "2", 10),
+            supervise: false,
+          }
+        : {}),
     };
     const boss = new PgBoss(pgBossOptions);
 
@@ -474,7 +500,26 @@ export async function enqueuePipelineJobImpl(
   logger.info(
     `[Queue] Enqueued pipeline job ${id} for letter #${normalizedData.letterId} (${normalizedData.label})`
   );
+  // Serverless: nothing is polling the queue, so start draining now. Deferred
+  // jobs (startAfter) are picked up by the scheduled drain once they are due.
+  if (!options?.startAfter) {
+    await kickDrain();
+  }
   return id!;
+}
+
+/**
+ * Start a background queue drain on Vercel. Imported lazily because
+ * queueDrain -> worker -> queue would otherwise be a circular import.
+ */
+async function kickDrain(): Promise<void> {
+  if (!process.env.VERCEL) return;
+  try {
+    const { kickQueueDrain } = await import("./queueDrain");
+    kickQueueDrain();
+  } catch (err) {
+    logger.error({ err }, "[Queue] Failed to kick queue drain (scheduled drain will pick the job up)");
+  }
 }
 
 export async function enqueueDraftPreviewReleaseJob(
@@ -563,6 +608,7 @@ export async function enqueueRetryFromStageJob(
   logger.info(
     `[Queue] Enqueued retry-from-stage job ${id} for letter #${data.letterId} (stage: ${data.stage})`
   );
+  await kickDrain();
   return id!;
 }
 

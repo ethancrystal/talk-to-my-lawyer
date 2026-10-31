@@ -312,7 +312,7 @@ describe("Stripe Webhook Sentry instrumentation", () => {
 // ─── 10. Server entry Sentry setup ───
 
 describe("Server entry Sentry setup", () => {
-  const indexPath = path.join(__dirname, "_core/index.ts");
+  const indexPath = path.join(__dirname, "_core/appFactory.ts");
 
   it("server entry imports initServerSentry", () => {
     const content = fs.readFileSync(indexPath, "utf-8");
@@ -324,7 +324,7 @@ describe("Server entry Sentry setup", () => {
     expect(content).toContain("initServerSentry()");
     // Should be before express import
     const sentryIndex = content.indexOf("initServerSentry()");
-    const expressIndex = content.indexOf('import express from "express"');
+    const expressIndex = content.indexOf('import express, { type Express } from "express"');
     expect(sentryIndex).toBeLessThan(expressIndex);
   });
 
