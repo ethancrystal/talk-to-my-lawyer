@@ -98,10 +98,12 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-// Static system prompt for simple pipeline — cached via Anthropic prompt caching.
-// This prefix is identical across all simple-pipeline calls, so the API server
-// caches it for 5 minutes and subsequent calls within the window pay reduced
-// input token costs (~90% savings on the system block).
+// Static system prompt for simple pipeline, marked for Anthropic prompt caching.
+// NOTE: caching only applies once the cached prefix reaches the model's minimum
+// (1,024 tokens for Sonnet). This prompt is well under that, so today every call
+// logs cacheRead: 0 and pays full input price — about 600 tokens per letter.
+// The marker is kept so caching starts automatically if the prompt grows past
+// the minimum; padding it just to qualify would cost more than it saves.
 const SIMPLE_SYSTEM_PROMPT = `You are a professional legal letter writer. Generate a formal legal letter based on the user's information.
 
 The letter should:

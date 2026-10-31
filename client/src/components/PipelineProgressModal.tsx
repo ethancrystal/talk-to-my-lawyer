@@ -250,8 +250,10 @@ export default function PipelineProgressModal({
   useEffect(() => {
     if (open && isComplete && letterId && isReleasedToSubscriber) {
       const timer = setTimeout(() => {
-        navigate(`/letters/${letterId}`);
+        // Close first: the parent's onClose may navigate (SubmitLetter sends
+        // the user to /letters). Navigating last makes the letter page win.
         onClose();
+        navigate(`/letters/${letterId}`);
       }, 2000);
       return () => clearTimeout(timer);
     }
