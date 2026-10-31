@@ -13,6 +13,7 @@ import {
   upsertPipelineRecord,
 } from "../db";
 import { enqueueDraftPreviewReleaseJob, enqueuePipelineJob } from "../queue";
+import { runSimplePipeline } from "../pipeline/simple";
 import { letterRequests } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../logger";

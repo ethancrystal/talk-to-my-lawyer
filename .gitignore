@@ -184,3 +184,6 @@ artifacts/mockup-sandbox/package-lock.json
 core.*
 *-debug*.png
 *-debug*.jpg
+
+# Vercel
+.vercel/
