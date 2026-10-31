@@ -63,6 +63,9 @@ const mockCreateAdminVerificationCode = vi.fn();
 const mockGetAllUsers = vi.fn();
 
 vi.mock("./db", () => ({
+  recordSignupIp: vi.fn().mockResolvedValue(undefined),
+  countSignupsFromIp: vi.fn().mockResolvedValue(0),
+  getSignupAccountsPerIp: vi.fn().mockReturnValue(1),
   getUserByOpenId: mockGetUserByOpenId,
   upsertUser: mockUpsertUser,
   getUserById: mockGetUserById,
