@@ -45,6 +45,13 @@ function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
+      // The Vercel function is killed at 300s (vercel.json maxDuration). Bound
+      // each call so the worst case (2 attempts × 120s) still ends inside that
+      // window and the pipeline's own failure path runs (mark failed, refund the
+      // free slot) instead of the invocation being cut off mid-call. The SDK
+      // default is 10 minutes per attempt.
+      timeout: 120_000,
+      maxRetries: 1,
     });
   }
   return anthropicClient;
@@ -55,6 +62,9 @@ function getOpenAiClient(): OpenAI {
   if (!openaiClient) {
     openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
+      // Same budget as the Anthropic client above.
+      timeout: 120_000,
+      maxRetries: 1,
     });
   }
   return openaiClient;
@@ -327,7 +337,22 @@ async function generateLetterForSimplePipeline(
   }
 }
 
-function buildPrompt(intake: IntakeJson): string {
+/**
+ * Today's date as it should appear on the letter ("October 31, 2026"), in
+ * California time — the service's jurisdiction — so a letter drafted late in
+ * the evening Pacific isn't dated tomorrow. Supplied to the model so it writes
+ * the real date instead of an "[INSERT DATE]" placeholder.
+ */
+export function formatLetterDate(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+export function buildPrompt(intake: IntakeJson, now: Date = new Date()): string {
   const {
     matter,
     jurisdiction,
@@ -340,7 +365,8 @@ function buildPrompt(intake: IntakeJson): string {
 
   // The static instructions now live in SIMPLE_SYSTEM_PROMPT (cached).
   // This user prompt contains only the per-letter dynamic data.
-  return `**Letter Type:** ${matter?.category || "General Legal Matter"}
+  return `**Letter Date:** ${formatLetterDate(now)} (use this exact date at the top of the letter)
+**Letter Type:** ${matter?.category || "General Legal Matter"}
 **Subject:** ${matter?.subject || "N/A"}
 **Description:** ${matter?.description || "N/A"}
 
@@ -348,6 +374,7 @@ function buildPrompt(intake: IntakeJson): string {
 
 **From (Sender):**
 - Name: ${sender?.name || "N/A"}
+- Address: ${sender?.address || "N/A"}
 - Email: ${sender?.email || "N/A"}
 - Phone: ${sender?.phone || "N/A"}
 
