@@ -57,6 +57,7 @@ import { registerNewsletterRoute } from "../newsletterRoute";
 import { registerConfigRoute } from "../configRoute";
 import { registerClientPortalRoute } from "../clientPortalRoute";
 import { registerSentryDebugRoute } from "../sentryDebugRoute";
+import { registerCronRoutes } from "../cronRoutes";
 import { stripeWebhookHandler } from "../stripeWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -97,6 +98,17 @@ function getAllowedOrigins(): Set<string> {
   for (const o of extraOrigins) origins.add(o);
   const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
   if (replitDevDomain) origins.add(`https://${replitDevDomain}`);
+  // This deployment's own Vercel hostnames (system env vars set by Vercel).
+  // Same-origin requests don't need CORS, but listing them keeps credentialed
+  // calls working across the deployment / branch / production aliases. Never a
+  // *.vercel.app wildcard: any Vercel user could host a page there.
+  for (const host of [
+    process.env.VERCEL_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  ]) {
+    if (host) origins.add(`https://${host}`);
+  }
   return origins;
 }
 
@@ -144,28 +156,37 @@ export async function createApp(opts: CreateAppOptions = {}): Promise<AppInstanc
   const allowedOrigins = getAllowedOrigins();
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // Vercel serverless functions: allow all origins in production
-    const isVercel = process.env.VERCEL === "1";
-    const allowedInVercel = isVercel || allowedOrigins.has(origin);
-    // Regex patterns for development origins
-    const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-    const railwayRegex = /^https:\/\/[a-z0-9-]+\.railway\.app$/;
-    const replitRegex = /^https:\/\/[a-z0-9-]+\.replit\.dev$/;
+    const localhostOrigin =
+      !!origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    // Allow any *.railway.app origin (Railway preview deployments)
+    const railwayOrigin =
+      !!origin && /^https:\/\/[a-z0-9-]+\.railway\.app$/.test(origin);
+    // Allow any *.replit.dev origin (Replit preview deployments)
+    const replitOrigin =
+      !!origin && /^https:\/\/[a-z0-9-]+\.replit\.dev$/.test(origin);
 
-    // CORS check: allow if origin is in allowed list OR matches development patterns
-    const isAllowedOrigin =
-      allowedInVercel ||
-      (isDev && localhostRegex.test(origin)) ||
-      railwayRegex.test(origin) ||
-      (isDev && replitRegex.test(origin));
-
-    if (isAllowedOrigin) {
+    if (
+      origin &&
+      (allowedOrigins.has(origin) ||
+        (isDev && localhostOrigin) ||
+        railwayOrigin ||
+        (isDev && replitOrigin))
+    ) {
       res.setHeader("Access-Control-Allow-Origin", origin);
-      // Allow credentials for authenticated requests
       res.setHeader("Access-Control-Allow-Credentials", "true");
     }
-
-    // Always call next() to continue middleware chain
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Client-Info, Apikey, x-trpc-source"
+    );
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
     next();
   });
 
@@ -281,6 +302,7 @@ export async function createApp(opts: CreateAppOptions = {}): Promise<AppInstanc
   registerNewsletterRoute(app);
   registerConfigRoute(app);
   registerClientPortalRoute(app);
+  registerCronRoutes(app);
 
   // ─── tRPC ───────────────────────────────────────────────────────────────────
   app.use("/api/trpc",

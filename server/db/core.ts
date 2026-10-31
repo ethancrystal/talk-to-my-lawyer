@@ -28,7 +28,8 @@ export async function getDb() {
         // Primary pool: writes + consistency-sensitive reads only.
         // Read-heavy paths (analytics, blog, admin, lessons) use getReadDb() → replica.
         // Keep this small to leave headroom for pg-boss + replica pool.
-        max: parseInt(process.env.DB_POOL_MAX ?? "10", 10),
+        // Serverless instances each open their own pool — keep it tiny on Vercel.
+        max: parseInt(process.env.DB_POOL_MAX ?? (process.env.VERCEL ? "3" : "10"), 10),
         idle_timeout: 20,
         connect_timeout: 10,
       });
@@ -57,7 +58,7 @@ export async function getReadDb() {
   try {
     const client = postgres(replicaUrl, {
       ssl: buildPostgresSslConfig(replicaUrl),
-      max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
+      max: parseInt(process.env.DB_READ_POOL_MAX ?? (process.env.VERCEL ? "3" : "15"), 10),
       idle_timeout: 20,
       connect_timeout: 10,
     });

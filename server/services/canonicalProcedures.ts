@@ -13,7 +13,6 @@ import {
   upsertPipelineRecord,
 } from "../db";
 import { enqueueDraftPreviewReleaseJob, enqueuePipelineJob } from "../queue";
-import { runSimplePipeline } from "../pipeline/simple";
 import { letterRequests } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../logger";
@@ -29,6 +28,20 @@ import {
 // ─── Constants and Types ───────────────────────────────────────────────────
 
 const LETTER_HOLD_HOURS = 24;
+
+/**
+ * Draft visibility hold in ms. Defaults to LETTER_HOLD_HOURS; the
+ * LETTER_HOLD_MINUTES env var shortens it for demo/staging deployments
+ * (e.g. `0` makes a free-preview draft visible as soon as it is generated).
+ * Read per call so tests and deployments can change it without a rebuild.
+ */
+function getLetterHoldMs(): number {
+  const minutes = Number(process.env.LETTER_HOLD_MINUTES);
+  if (process.env.LETTER_HOLD_MINUTES?.trim() && Number.isFinite(minutes) && minutes >= 0) {
+    return minutes * 60 * 1000;
+  }
+  return LETTER_HOLD_HOURS * 60 * 60 * 1000;
+}
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250929"; // Aligned with pipeline/providers.ts SONNET_PRICING. Predecessor "claude-sonnet-4-20250514" deprecated by Anthropic, EOL 2026-06-15.
 
 export type LetterGenerationMethod =
@@ -108,7 +121,7 @@ export async function submitSubscriberIntakeProcedure(
 
   const submittedAt = new Date();
   const subscriberVisibleAt = new Date(
-    submittedAt.getTime() + LETTER_HOLD_HOURS * 60 * 60 * 1000
+    submittedAt.getTime() + getLetterHoldMs()
   );
 
   const result = await createLetterRequest({
