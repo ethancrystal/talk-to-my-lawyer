@@ -28,6 +28,7 @@ import { invalidateUserCache } from "../user-cache";
 import { getOriginUrl, isSupabaseEmailConfirmed } from "../helpers";
 import { extractAccessToken, parseCookies } from "../jwt";
 import { logger } from "../../logger";
+import { getClientIp } from "../../rateLimiter";
 
 export function registerSignupLoginRoutes(app: Express) {
 
@@ -50,6 +51,20 @@ export function registerSignupLoginRoutes(app: Express) {
       if (password.length < 8) {
         res.status(400).json({ error: "Password must be at least 8 characters" });
         return;
+      }
+
+      // One account per signup IP (anti free-letter farming). Checked before the
+      // Supabase auth user is created so a refused signup leaves nothing behind.
+      const clientIp = getClientIp(req);
+      const isWhitelistedOwner = (SUPER_ADMIN_EMAILS as readonly string[]).includes(String(email).toLowerCase());
+      const perIpLimit = db.getSignupAccountsPerIp();
+      if (!isWhitelistedOwner && perIpLimit > 0 && clientIp !== "unknown") {
+        const existingFromIp = await db.countSignupsFromIp(clientIp);
+        if (existingFromIp >= perIpLimit) {
+          logger.warn({ ip: clientIp, existingFromIp }, "[SupabaseAuth] Signup refused — account limit reached for IP");
+          res.status(409).json({ error: "An account has already been created from this network. Please sign in to your existing account." });
+          return;
+        }
       }
 
       const origin = getOriginUrl(req);
@@ -94,6 +109,12 @@ export function registerSignupLoginRoutes(app: Express) {
       invalidateUserCache(data.user.id);
 
       const appUser = await db.getUserByOpenId(data.user.id);
+
+      if (appUser && clientIp !== "unknown") {
+        await db
+          .recordSignupIp({ userId: appUser.id, ip: clientIp, email, method: "email" })
+          .catch(err => logger.error({ err }, "[SupabaseAuth] Failed to record signup IP"));
+      }
 
       if (appUser && !isOwner) {
         try {

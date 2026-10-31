@@ -1,7 +1,7 @@
 /**
  * Stripe Subscriptions — subscription lifecycle management
  */
-import { getDb, countCompletedLetters, getUserById } from "../db";
+import { getDb, countCompletedLetters, getUserById, isFreeLetterUsedFromSameIp } from "../db";
 import { subscriptions } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { getPlanConfig } from "../stripe-products";
@@ -157,6 +157,14 @@ export async function checkLetterSubmissionAllowed(
     // (covers legacy users who had letters before this column was introduced)
     const completedCount = await countCompletedLetters(userId);
     if (completedCount === 0) {
+      // One free letter per signup network, not just per account.
+      if (await isFreeLetterUsedFromSameIp(userId)) {
+        return {
+          allowed: false,
+          reason:
+            "The free letter has already been used from your network. Please choose a plan to continue.",
+        };
+      }
       return {
         allowed: true,
         firstLetterFree: true,
