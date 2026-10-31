@@ -1,0 +1,134 @@
+{
+  "run": 78,
+  "date": "2026-06-26",
+  "session": "claude/intelligent-gates-eh58zl",
+  "native_dependabot_prs": 0,
+  "cves": 0,
+  "new_updates_applied": 0,
+  "deferred_count": 9,
+  "stale_audit_prs": 95,
+  "audit_result": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies_scanned": 786
+  },
+  "applied": [],
+  "deferred": [
+    {
+      "package": "ai",
+      "current": "6.0.208",
+      "latest": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "New streaming wire protocol; system -> instructions rename; result.fullStream -> result.stream; onFinish -> onEnd; token usage fields restructured; OpenTelemetry moved to @ai-sdk/otel. Must upgrade atomically with @ai-sdk/* v4."
+    },
+    {
+      "package": "@ai-sdk/anthropic",
+      "current": "3.0.85",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "ESM-only. Must upgrade atomically with ai v7 and @ai-sdk/openai v4. cacheCreationInputTokens removed from providerMetadata."
+    },
+    {
+      "package": "@ai-sdk/openai",
+      "current": "3.0.74",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "ESM-only. Renamed symbols. Must upgrade atomically with ai v7 and @ai-sdk/anthropic v4."
+    },
+    {
+      "package": "typescript",
+      "current": "5.9.3",
+      "latest": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "types defaults to [] (all @types/* break without explicit list). strict now default. moduleResolution:classic removed. target:es5 removed. Dedicated migration branch required."
+    },
+    {
+      "package": "express",
+      "current": "4.22.2",
+      "latest": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Bare * wildcard removed (named /*path required). app.del() removed. req.param() removed. path-to-regexp v8 changes legacy routes. Use @expressjs/v5-migration-recipe codemod."
+    },
+    {
+      "package": "@types/express",
+      "current": "4.17.21",
+      "latest": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "v5 types require Express 5 runtime; upgrading without Express 5 breaks TypeScript compilation."
+    },
+    {
+      "package": "puppeteer",
+      "current": "24.43.1",
+      "latest": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "executablePath() and defaultArgs() now async (Promise) - breaks server/draftPdfRoute.ts. ESM-only. Browser.isConnected() removed."
+    },
+    {
+      "package": "pnpm",
+      "current": "10.34.1",
+      "latest": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "CRITICAL: pnpm.overrides field in package.json is silently ignored after upgrade - all 19 CVE pins drop unless migrated to pnpm-workspace.yaml first. Run pnpx codemod run pnpm-v10-to-v11 before upgrading."
+    },
+    {
+      "package": "@types/node",
+      "current": "24.13.1",
+      "latest": "26.0.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Node.js runtime pinned to >=22.12.0; @types/node 26.x surfaces Node 26-only APIs unavailable on Node 22. Upgrade runtime first."
+    }
+  ],
+  "open_prs_summary": {
+    "total_open": 50,
+    "dependabot_native": 0,
+    "audit_report_prs": 47,
+    "other_prs": 3,
+    "latest_audit_pr": 452,
+    "latest_audit_run": 77,
+    "note": "50 open PRs — all are agent-generated audit/SEO/fix PRs. No native dependabot[bot] PRs."
+  },
+  "cve_overrides_intact": 19,
+  "pnpm_overrides": [
+    "esbuild@0.28.1 (GHSA-g7r4-m6w7-qqqr SSRF)",
+    "fast-xml-parser@5.7.2 (XXE injection)",
+    "fast-xml-builder>=1.1.7 (XML injection)",
+    "path-to-regexp@0.1.13 (GHSA-9wv6-86v2-598j ReDoS)",
+    "brace-expansion@5.0.6 (ReDoS)",
+    "qs>=6.15.2 (prototype pollution)",
+    "langsmith>=0.6.0 (auth bypass)",
+    "dompurify<=3.3.3 (XSS)",
+    "dompurify<=3.4.10 (XSS mutations)",
+    "form-data<2.5.6 (CVE-2026-12143 HIGH)",
+    "@opentelemetry/core<2.8.0 (CVE-2026-54285)",
+    "postcss<8.5.10 (CSS parsing vuln)",
+    "@xmldom/xmldom@0.9.10 (XXE)",
+    "uuid@14.0.0 (entropy)",
+    "picomatch@4.0.4 (ReDoS)",
+    "tailwindcss>nanoid@3.3.7 (insecure randomness)",
+    "@tootallnate/once@3.0.1 (prototype pollution)",
+    "basic-ftp (x2, RCE via path traversal)"
+  ],
+  "delta_from_run77": {
+    "cves": "unchanged (0)",
+    "applied_updates": "0 (Run 77 already applied @anthropic-ai/sdk 0.106.0)",
+    "deferred_packages": "unchanged (9)",
+    "dependabot_prs": "unchanged (0)",
+    "stale_audit_prs": "+1 (95 total)"
+  },
+  "decision": "NO_CHANGES",
+  "decision_rationale": "pnpm audit clean, 0 CVEs, 0 native Dependabot PRs, @anthropic-ai/sdk already updated in Run 77, all 9 remaining deferred packages are major version bumps with documented breaking changes requiring dedicated migration branches."
+}

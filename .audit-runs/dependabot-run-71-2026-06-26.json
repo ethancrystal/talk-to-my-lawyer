@@ -1,0 +1,136 @@
+{
+  "run": 71,
+  "date": "2026-06-26",
+  "source_branch": "claude/intelligent-gates-w2nofo",
+  "investigator": "claude-code-automated-routine",
+  "audit_result": {
+    "native_dependabot_prs": 0,
+    "human_audit_prs_open": 44,
+    "prs_assessed_this_run": 0,
+    "prs_merged_this_run": 0,
+    "prs_left_unmerged": 44,
+    "pnpm_audit_before": "0 vulnerabilities (786 dependencies)",
+    "pnpm_audit_after": "0 vulnerabilities (786 dependencies)",
+    "packages_upgraded": 19,
+    "typescript_check": "passed (tsc --noEmit clean)",
+    "test_suite": "1852/1861 passed — 6 pre-existing Supabase connection failures (supabase-realtime, super-admin-whitelist, simple-pipeline-lifecycle) confirmed pre-existing on clean main"
+  },
+  "security_advisories_fixed": [],
+  "packages_upgraded": [
+    { "name": "@langchain/langgraph", "from": "1.4.5", "to": "1.4.7", "type": "patch", "decision": "APPLIED", "reason": "Bug fixes in LangGraph state graph — same major; pipeline health unaffected" },
+    { "name": "@langchain/langgraph-checkpoint-postgres", "from": "1.0.3", "to": "1.0.4", "type": "patch", "decision": "APPLIED", "reason": "Checkpoint patch; no API change" },
+    { "name": "@langchain/openai", "from": "1.5.2", "to": "1.5.3", "type": "patch", "decision": "APPLIED", "reason": "LangChain OpenAI adapter patch" },
+    { "name": "@sentry/node", "from": "10.59.0", "to": "10.62.0", "type": "minor", "decision": "APPLIED", "reason": "Three minor releases — Sentry maintains strict backward compat within major 10" },
+    { "name": "@sentry/react", "from": "10.59.0", "to": "10.62.0", "type": "minor", "decision": "APPLIED", "reason": "Three minor releases — matches @sentry/node version" },
+    { "name": "@tanstack/react-query", "from": "5.101.0", "to": "5.101.1", "type": "patch", "decision": "APPLIED", "reason": "TanStack Query patch" },
+    { "name": "framer-motion", "from": "12.40.0", "to": "12.42.0", "type": "minor", "decision": "APPLIED", "reason": "Animation library minor — no API changes affecting existing usage" },
+    { "name": "google-auth-library", "from": "10.7.0", "to": "10.9.0", "type": "minor", "decision": "APPLIED", "reason": "Auth library minor within 10.x — additive only" },
+    { "name": "nanoid", "from": "5.1.15", "to": "5.1.16", "type": "patch", "decision": "APPLIED", "reason": "ID generator patch" },
+    { "name": "node-cron", "from": "4.4.1", "to": "4.5.0", "type": "minor", "decision": "APPLIED", "reason": "Cron scheduler minor; additive features only" },
+    { "name": "openai", "from": "6.44.0", "to": "6.45.0", "type": "minor", "decision": "APPLIED", "reason": "Official OpenAI SDK minor within 6.x — additive" },
+    { "name": "pg-boss", "from": "12.20.0", "to": "12.23.0", "type": "minor", "decision": "APPLIED", "reason": "Job queue minor — three releases of bug fixes and performance improvements" },
+    { "name": "resend", "from": "6.14.0", "to": "6.16.0", "type": "minor", "decision": "APPLIED", "reason": "Email SDK minor within 6.x — additive" },
+    { "name": "stripe", "from": "22.2.3", "to": "22.3.0", "type": "minor", "decision": "APPLIED", "reason": "Stripe SDK minor — adds new API surface, does not break existing calls" },
+    { "name": "@playwright/test", "from": "1.61.0", "to": "1.61.1", "type": "patch", "decision": "APPLIED", "reason": "E2E test runner patch (dev)" },
+    { "name": "@vitejs/plugin-react", "from": "6.0.2", "to": "6.0.3", "type": "patch", "decision": "APPLIED", "reason": "Vite React plugin patch (dev)" },
+    { "name": "autoprefixer", "from": "10.5.0", "to": "10.5.2", "type": "patch", "decision": "APPLIED", "reason": "CSS autoprefixer patch (dev)" },
+    { "name": "prettier", "from": "3.8.4", "to": "3.8.5", "type": "patch", "decision": "APPLIED", "reason": "Formatter patch (dev)" },
+    { "name": "vite", "from": "8.0.16", "to": "8.1.0", "type": "minor", "decision": "APPLIED", "reason": "Build tool minor within 8.x — new features (rolldown improvements), fully backward compat" }
+  ],
+  "packages_deferred": [
+    {
+      "name": "@anthropic-ai/sdk",
+      "from": "0.105.0",
+      "to": "0.106.0",
+      "type": "minor-0x",
+      "decision": "DEFER",
+      "reason": "0.x semver — minor bumps may contain breaking changes. The ^0.105.0 range in package.json correctly excludes 0.106.0. Needs dedicated changelog review before manual bump."
+    },
+    {
+      "name": "ai",
+      "from": "6.0.208",
+      "to": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "New streaming wire protocol, renamed exports, tool-call shape change — must upgrade atomically with @ai-sdk/* v4"
+    },
+    {
+      "name": "@ai-sdk/anthropic",
+      "from": "3.0.85",
+      "to": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Must upgrade together with ai v7 and @ai-sdk/openai v4"
+    },
+    {
+      "name": "@ai-sdk/openai",
+      "from": "3.0.74",
+      "to": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Must upgrade together with ai v7 and @ai-sdk/anthropic v4"
+    },
+    {
+      "name": "typescript",
+      "from": "5.9.3",
+      "to": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "strict: true now default, types: [] now default, legacy module options removed — dedicated migration branch needed"
+    },
+    {
+      "name": "puppeteer",
+      "from": "24.43.1",
+      "to": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "executablePath() / defaultArgs() now async — breaks server/pdfGenerator.ts; ESM-only"
+    },
+    {
+      "name": "express",
+      "from": "4.22.2",
+      "to": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Named wildcard routing syntax changes, res.redirect() behaviour change — needs codemod migration branch"
+    },
+    {
+      "name": "@types/express",
+      "from": "4.17.21",
+      "to": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "v5 types require Express 5 runtime; breaks TypeScript with v4"
+    },
+    {
+      "name": "pnpm",
+      "from": "10.34.1",
+      "to": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Config migrated from package.json pnpm field to .npmrc only; store format changed to SQLite"
+    },
+    {
+      "name": "@types/node",
+      "from": "24.13.1",
+      "to": "26.0.1",
+      "type": "major",
+      "decision": "DEFER",
+      "reason": "Node 26 types on Node 22 runtime; two major jumps"
+    }
+  ],
+  "pr_decisions": [
+    {
+      "pr": "443",
+      "title": "chore(deps): Dependency Audit Run 70 (2026-06-25) — 0 CVEs, 0 Dependabot PRs, 9 majors deferred",
+      "decision": "STALE",
+      "reason": "Superseded by this run (71). Docs-only PR; no code changes applied. Safe to close."
+    },
+    {
+      "pr": "309-442",
+      "decision": "STALE",
+      "reason": "44 open audit report PRs from prior runs. All superseded by Run 71. No code changes in any of them."
+    }
+  ],
+  "delta_from_run_70": "19 patch/minor packages applied (none were applied in Run 70). 9 major deferred packages unchanged. @anthropic-ai/sdk 0.105.0→0.106.0 newly deferred (0.x semver). Security posture unchanged: 0 CVEs."
+}

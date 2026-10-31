@@ -1,0 +1,118 @@
+{
+  "run": 73,
+  "date": "2026-06-26",
+  "native_dependabot_prs": 0,
+  "cves": 0,
+  "new_updates_applied": 0,
+  "deferred_count": 10,
+  "stale_audit_prs": 91,
+  "audit_result": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies_scanned": 786
+  },
+  "deferred": [
+    {
+      "package": "@anthropic-ai/sdk",
+      "current": "0.105.0",
+      "latest": "0.106.0",
+      "type": "0.x minor",
+      "decision": "DEFER",
+      "blocker": "0.x semver — ^0.105.0 range excludes 0.106.x. Needs dedicated changelog review before manual bump."
+    },
+    {
+      "package": "ai",
+      "current": "6.0.208",
+      "latest": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "New streaming wire protocol, renamed exports, tool-call shape change — must upgrade atomically with @ai-sdk/* v4."
+    },
+    {
+      "package": "@ai-sdk/anthropic",
+      "current": "3.0.85",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Must upgrade together with ai v7 and @ai-sdk/openai v4."
+    },
+    {
+      "package": "@ai-sdk/openai",
+      "current": "3.0.74",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Must upgrade together with ai v7 and @ai-sdk/anthropic v4."
+    },
+    {
+      "package": "typescript",
+      "current": "5.9.3",
+      "latest": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "strict: true now default, types: [] now default, legacy module options removed — dedicated migration branch needed."
+    },
+    {
+      "package": "puppeteer",
+      "current": "24.43.1",
+      "latest": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "executablePath()/defaultArgs() now async — breaks server/pdfGenerator.ts; ESM-only."
+    },
+    {
+      "package": "express",
+      "current": "4.22.2",
+      "latest": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Named wildcard routing syntax changes, res.redirect() behaviour change — needs codemod migration branch."
+    },
+    {
+      "package": "@types/express",
+      "current": "4.17.21",
+      "latest": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "v5 types require Express 5 runtime; breaks TypeScript with v4."
+    },
+    {
+      "package": "pnpm",
+      "current": "10.34.1",
+      "latest": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Config migrated from package.json pnpm field to .npmrc only; store format changed to SQLite."
+    },
+    {
+      "package": "@types/node",
+      "current": "24.13.1",
+      "latest": "26.0.1",
+      "type": "major (2 jumps)",
+      "decision": "DEFER",
+      "blocker": "Node 26 types on Node 22 runtime; two major version jumps."
+    }
+  ],
+  "test_baseline": {
+    "tsc": "clean",
+    "tests_passed": 1852,
+    "tests_total": 1861,
+    "tests_failed": 6,
+    "pre_existing_failures": [
+      "supabase-realtime",
+      "super-admin-whitelist",
+      "simple-pipeline-lifecycle"
+    ]
+  },
+  "prior_run": {
+    "run": 72,
+    "pr": 447,
+    "merged": false,
+    "updates_applied": 0
+  }
+}

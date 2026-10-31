@@ -36,6 +36,12 @@ export interface RouteSeo {
   ogType: "website" | "article";
   publishedTime?: string;
   modifiedTime?: string;
+  // Server-rendered JSON-LD blocks (already-serialized JSON strings). Emitted as
+  // <script type="application/ld+json"> in the document head so non-JS-rendering
+  // crawlers and AI answer engines receive page-specific structured data. Blog
+  // posts are excluded from the build-time prerender, so without this their
+  // Article/BreadcrumbList schema would exist only in the client bundle.
+  jsonLd?: string[];
 }
 
 export interface SpaRouteResolution {
@@ -486,24 +492,91 @@ function formatIsoDate(
   return date.toISOString();
 }
 
+// Serialize a JSON-LD object for safe embedding inside a <script> element.
+// Escapes the characters that could break out of the script context (`<`, `>`)
+// or be misread by an HTML parser (`&`).
+function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
+// Build the Article + BreadcrumbList structured data for a blog post. Mirrors
+// the shape injected client-side via react-helmet in client/src/pages/BlogPost.tsx
+// so search engines see a consistent entity whether or not the SPA bundle runs.
+function blogPostJsonLd(
+  canonical: string,
+  description: string,
+  post: SeoBlogPost
+): string[] {
+  const published = formatIsoDate(post.publishedAt);
+  const modified = formatIsoDate(post.updatedAt ?? post.publishedAt);
+  const image = post.ogImageUrl ?? DEFAULT_IMAGE;
+
+  const article: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description,
+    image,
+    author: { "@type": "Organization", name: "Talk to My Lawyer" },
+    publisher: {
+      "@type": "Organization",
+      name: "Talk to My Lawyer",
+      logo: { "@type": "ImageObject", url: DEFAULT_IMAGE },
+    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonical },
+  };
+  if (published) article.datePublished = published;
+  if (modified) article.dateModified = modified;
+
+  const breadcrumb = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: `${SITE_ORIGIN}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Blog",
+        item: `${SITE_ORIGIN}/blog`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: post.title,
+        item: canonical,
+      },
+    ],
+  };
+
+  return [serializeJsonLd(article), serializeJsonLd(breadcrumb)];
+}
+
 function blogPostSeo(pathname: string, post: SeoBlogPost): RouteSeo {
-  return withCanonical(pathname, {
+  const description =
+    post.metaDescription?.trim() ||
+    post.excerpt?.trim() ||
+    "Legal guidance from Talk to My Lawyer.";
+  const seo = withCanonical(pathname, {
     title: `${post.title} - Talk to My Lawyer Blog`,
-    description:
-      post.metaDescription?.trim() ||
-      post.excerpt?.trim() ||
-      "Legal guidance from Talk to My Lawyer.",
+    description,
     robots: INDEX_ROBOTS,
     ogTitle: post.title,
-    ogDescription:
-      post.metaDescription?.trim() ||
-      post.excerpt?.trim() ||
-      "Legal guidance from Talk to My Lawyer.",
+    ogDescription: description,
     ogImage: post.ogImageUrl ?? DEFAULT_IMAGE,
     ogType: "article",
     publishedTime: formatIsoDate(post.publishedAt),
     modifiedTime: formatIsoDate(post.updatedAt ?? post.publishedAt),
   });
+  seo.jsonLd = blogPostJsonLd(seo.canonical, description, post);
+  return seo;
 }
 
 function blogPostFallbackHtml(pathname: string, post: SeoBlogPost): string {
@@ -823,6 +896,15 @@ export function injectSeoIntoHtml(
     tags.push(
       `<meta property="article:modified_time" content="${escapeHtmlAttribute(seo.modifiedTime)}" />`
     );
+  }
+
+  // Page-specific JSON-LD (e.g. blog Article + BreadcrumbList). Appended, never
+  // stripped — the static shell and prerendered pages carry their own site-level
+  // schema (Organization/WebSite/LegalService) that must be preserved.
+  if (seo.jsonLd?.length) {
+    for (const block of seo.jsonLd) {
+      tags.push(`<script type="application/ld+json">${block}</script>`);
+    }
   }
 
   const managedHead = `\n    ${tags.join("\n    ")}\n`;

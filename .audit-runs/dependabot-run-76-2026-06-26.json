@@ -1,0 +1,132 @@
+{
+  "run": 76,
+  "date": "2026-06-26",
+  "native_dependabot_prs": 0,
+  "cves": 0,
+  "new_updates_applied": 0,
+  "deferred_count": 10,
+  "stale_audit_prs": 93,
+  "audit_result": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies_scanned": 786
+  },
+  "deferred": [
+    {
+      "package": "@anthropic-ai/sdk",
+      "current": "0.105.0",
+      "latest": "0.106.0",
+      "type": "0.x minor",
+      "decision": "DEFER",
+      "blocker": "0.x semver — ^0.105.0 range excludes 0.106.x. Needs dedicated changelog review before manual bump."
+    },
+    {
+      "package": "ai",
+      "current": "6.0.208",
+      "latest": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "New streaming wire protocol, renamed exports, tool-call shape change — must upgrade atomically with @ai-sdk/* v4."
+    },
+    {
+      "package": "@ai-sdk/anthropic",
+      "current": "3.0.85",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Must upgrade together with ai v7 and @ai-sdk/openai v4."
+    },
+    {
+      "package": "@ai-sdk/openai",
+      "current": "3.0.74",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Must upgrade together with ai v7 and @ai-sdk/anthropic v4."
+    },
+    {
+      "package": "typescript",
+      "current": "5.9.3",
+      "latest": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "strict: true now default, types: [] now default, legacy module options removed — dedicated migration branch needed."
+    },
+    {
+      "package": "puppeteer",
+      "current": "24.43.1",
+      "latest": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "executablePath()/defaultArgs() now async — breaks server/pdfGenerator.ts; ESM-only."
+    },
+    {
+      "package": "express",
+      "current": "4.22.2",
+      "latest": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Named wildcard routing syntax changes, res.redirect() behaviour change — needs codemod migration branch."
+    },
+    {
+      "package": "@types/express",
+      "current": "4.17.21",
+      "latest": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "v5 types require Express 5 runtime; breaks TypeScript with v4."
+    },
+    {
+      "package": "pnpm",
+      "current": "10.34.1",
+      "latest": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Config migrated from package.json pnpm field to .npmrc only; store format changed to SQLite. pnpm.overrides must be migrated to pnpm-workspace.yaml FIRST or all 19 CVE pins drop silently."
+    },
+    {
+      "package": "@types/node",
+      "current": "24.13.1",
+      "latest": "26.0.1",
+      "type": "major (2 jumps)",
+      "decision": "DEFER",
+      "blocker": "Node 26 types on Node 22 runtime; two major version jumps."
+    }
+  ],
+  "active_cve_overrides": {
+    "count": 19,
+    "packages": [
+      "tailwindcss>nanoid@3.3.7",
+      "fast-xml-parser@5.7.2",
+      "esbuild@0.28.1",
+      "path-to-regexp@0.1.13",
+      "picomatch@4.0.4",
+      "brace-expansion@5.0.6",
+      "langsmith@>=0.6.0",
+      "fast-xml-builder@>=1.1.7",
+      "qs@>=6.15.2",
+      "@tootallnate/once@3.0.1",
+      "basic-ftp@<=5.2.1 pinned >=5.2.2",
+      "basic-ftp@=5.2.0 pinned >=5.2.1",
+      "dompurify@<=3.3.3 pinned >=3.4.0",
+      "dompurify@<=3.4.10 pinned >=3.4.11",
+      "@xmldom/xmldom@0.9.10",
+      "uuid@14.0.0",
+      "postcss@<8.5.10 pinned >=8.5.10",
+      "form-data@<2.5.6 pinned >=2.5.6",
+      "@opentelemetry/core@<2.8.0 pinned >=2.8.0"
+    ]
+  },
+  "delta_from_run_75": "No changes — identical 10 deferred packages at identical versions. Security posture unchanged. pnpm audit clean at 0 CVEs across 786 deps. 0 native Dependabot PRs confirmed by live API check.",
+  "prior_run": {
+    "run": 75,
+    "pr": 450,
+    "merged": false,
+    "updates_applied": 0
+  }
+}

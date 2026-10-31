@@ -1,0 +1,53 @@
+{
+  "run": 141,
+  "date": "2026-06-27",
+  "branch": "claude/intelligent-gates-7j28r6",
+  "session": "https://claude.ai/code/session_01U8chLGNu7gE3dNUeU6bj3L",
+  "pnpm_audit_pre_fix": {
+    "vulnerabilities": 8,
+    "breakdown": { "critical": 0, "high": 6, "moderate": 2, "low": 0 }
+  },
+  "pnpm_audit_post_fix": {
+    "vulnerabilities": 0,
+    "breakdown": { "critical": 0, "high": 0, "moderate": 0, "low": 0 }
+  },
+  "total_dependencies": 786,
+  "native_dependabot_prs_open": 0,
+  "applied_updates": [
+    {
+      "package": "pnpm",
+      "from": "10.34.1",
+      "to": "10.34.4",
+      "type": "patch",
+      "reason": "8 CVEs (6 HIGH, 2 MODERATE) in pnpm 10.34.1, fixed in 10.34.4",
+      "advisories": [
+        "GHSA-gj8w-mvpf-x27x",
+        "GHSA-5wx6-mg75-v57r",
+        "GHSA-w466-c33r-3gjp",
+        "GHSA-72r4-9c5j-mj57",
+        "GHSA-fr4h-3cph-29xv",
+        "GHSA-qrv3-253h-g69c",
+        "GHSA-3qhv-2rgh-x77r",
+        "GHSA-4gxm-v5v7-fqc4"
+      ]
+    }
+  ],
+  "deferred_packages": [
+    { "package": "ai", "current": "6.0.208", "latest": "7.0.2", "reason": "Breaking: system->instructions, onFinish->onEnd; ESM-only; atomic group upgrade" },
+    { "package": "@ai-sdk/anthropic", "current": "3.0.85", "latest": "4.0.0", "reason": "ESM-only in v4; must co-upgrade with ai@7 and @ai-sdk/openai@4" },
+    { "package": "@ai-sdk/openai", "current": "3.0.74", "latest": "4.0.0", "reason": "ESM-only in v4; same atomic group as above" },
+    { "package": "express", "current": "4.22.2", "latest": "5.2.1", "reason": "path-to-regexp v8 breaking; req.param() removed; 15+ REST endpoints affected" },
+    { "package": "@types/express", "current": "4.17.21", "latest": "5.0.6", "reason": "Blocked on express@5 migration" },
+    { "package": "@types/node", "current": "24.13.1", "latest": "26.x", "reason": "Runtime is Node 22; v26 types surface non-existent APIs" },
+    { "package": "pnpm", "current": "10.34.4", "latest": "11.9.0", "reason": "HIGH RISK: v11 silently drops pnpm.overrides; migrate 19 CVE pins to pnpm-workspace.yaml first" },
+    { "package": "puppeteer", "current": "24.43.1", "latest": "25.2.1", "reason": "ESM-only; executablePath() becomes async; breaks server/draftPdfRoute.ts" }
+  ],
+  "active_overrides": 19,
+  "delta_from_run_140": {
+    "cves_pre_fix": "+8 (new pnpm advisories)",
+    "cves_post_fix": "0 (resolved)",
+    "applied_updates": "+1 (pnpm patch)",
+    "deferred_packages": "unchanged (8)",
+    "dependencies_count": "unchanged (786)"
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "run": 77,
+  "date": "2026-06-26",
+  "native_dependabot_prs": 0,
+  "cves": 0,
+  "new_updates_applied": 1,
+  "deferred_count": 9,
+  "stale_audit_prs": 94,
+  "audit_result": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "dependencies_scanned": 786
+  },
+  "applied": [
+    {
+      "package": "@anthropic-ai/sdk",
+      "from": "0.105.0",
+      "to": "0.106.0",
+      "decision": "APPLIED",
+      "reason": "Patch-level: marks claude-opus-4-1 as deprecated, fixes copy()/with_options() on Foundry client, preserves $defs when schema root is $ref, updates security reporting to HackerOne. No API surface changes. pnpm check passes."
+    }
+  ],
+  "deferred": [
+    {
+      "package": "ai",
+      "current": "6.0.208",
+      "latest": "7.0.2",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "New streaming wire protocol; system → instructions rename; result.fullStream → result.stream; onFinish → onEnd; token usage fields restructured; OpenTelemetry moved to separate @ai-sdk/otel. Must upgrade atomically with @ai-sdk/* v4. Entry point: callLlmWithFailover()."
+    },
+    {
+      "package": "@ai-sdk/anthropic",
+      "current": "3.0.85",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "ESM-only (drops CJS). Part of AI SDK v7 umbrella release — must upgrade together with ai v7 and @ai-sdk/openai v4 as a single atomic migration. cacheCreationInputTokens removed from providerMetadata."
+    },
+    {
+      "package": "@ai-sdk/openai",
+      "current": "3.0.74",
+      "latest": "4.0.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "ESM-only. Provider-level API changes, renamed symbols. Must upgrade together with ai v7 and @ai-sdk/anthropic v4."
+    },
+    {
+      "package": "typescript",
+      "current": "5.9.3",
+      "latest": "6.0.3",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "types now defaults to [] (all @types/* stop working without explicit list — breaks process, __dirname, describe etc). strict now default. module defaults to esnext. moduleResolution:classic removed. --module amd/umd/systemjs/none removed. target:es5 removed. esModuleInterop:false no longer allowed."
+    },
+    {
+      "package": "express",
+      "current": "4.22.2",
+      "latest": "5.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Bare * wildcard routing removed (must use named /*path). app.del() removed. req.param() removed. res.json(obj, status) signature removed. path-to-regexp v8 changes legacy route patterns. All REST route registrars in server/_core/index.ts need review."
+    },
+    {
+      "package": "@types/express",
+      "current": "4.17.21",
+      "latest": "5.0.6",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Must match Express runtime version. Mixing @types/express@5 with express@4 causes widespread TypeScript errors. Safe only after Express 5 migration."
+    },
+    {
+      "package": "puppeteer",
+      "current": "24.43.1",
+      "latest": "25.2.1",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "executablePath() and defaultArgs() now async (Promise) — runtime breakage if called synchronously in server/draftPdfRoute.ts. ESM-only. Browser.isConnected() removed. Network headers format changed."
+    },
+    {
+      "package": "pnpm",
+      "current": "10.34.1",
+      "latest": "11.9.0",
+      "type": "major",
+      "decision": "DEFER",
+      "blocker": "Config no longer read from package.json pnpm field — must move to pnpm-workspace.yaml. .npmrc now auth-only. Build overrides (onlyBuiltDependencies etc) replaced by allowBuilds. pnpm server removed. CRITICAL: pnpm.overrides must be migrated to pnpm-workspace.yaml FIRST or all 19 CVE pins drop silently. Run: pnpx codemod run pnpm-v10-to-v11."
+    },
+    {
+      "package": "@types/node",
+      "current": "24.13.1",
+      "latest": "26.0.1",
+      "type": "major (2 jumps)",
+      "decision": "DEFER",
+      "blocker": "Node.js runtime is pinned to >=22.12.0 in engines field. @types/node 26.x reflects Node 26 APIs — types for Node 26-only features would be available but not exist at runtime. Two major version jumps. Monitor runtime upgrade to Node 26 first."
+    }
+  ],
+  "active_cve_overrides": {
+    "count": 19,
+    "packages": [
+      "tailwindcss>nanoid@3.3.7",
+      "fast-xml-parser@5.7.2",
+      "esbuild@0.28.1",
+      "path-to-regexp@0.1.13",
+      "picomatch@4.0.4",
+      "brace-expansion@5.0.6",
+      "langsmith@>=0.6.0",
+      "fast-xml-builder@>=1.1.7",
+      "qs@>=6.15.2",
+      "@tootallnate/once@3.0.1",
+      "basic-ftp@<=5.2.1 pinned >=5.2.2",
+      "basic-ftp@=5.2.0 pinned >=5.2.1",
+      "dompurify@<=3.3.3 pinned >=3.4.0",
+      "dompurify@<=3.4.10 pinned >=3.4.11",
+      "@xmldom/xmldom@0.9.10",
+      "uuid@14.0.0",
+      "postcss@<8.5.10 pinned >=8.5.10",
+      "form-data@<2.5.6 pinned >=2.5.6",
+      "@opentelemetry/core@<2.8.0 pinned >=2.8.0"
+    ]
+  },
+  "delta_from_run_76": "@anthropic-ai/sdk bumped 0.105.0 → 0.106.0 (patch: deprecation marks, bugfixes, no API changes). pnpm check passes. All other 9 deferred packages unchanged. Security posture identical: 0 CVEs, 19 CVE pins intact.",
+  "prior_run": {
+    "run": 76,
+    "pr": 451,
+    "merged": false,
+    "updates_applied": 0
+  }
+}

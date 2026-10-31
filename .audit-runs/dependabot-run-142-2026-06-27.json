@@ -1,0 +1,45 @@
+{
+  "run": 142,
+  "date": "2026-06-27",
+  "branch": "claude/intelligent-gates-6e9v22",
+  "session": "https://claude.ai/code/session_01E3tTon5714NsqJPNiP7iDG",
+  "pnpm_audit_pre_fix": {
+    "vulnerabilities": 0,
+    "breakdown": { "critical": 0, "high": 0, "moderate": 0, "low": 0 }
+  },
+  "pnpm_audit_post_fix": {
+    "vulnerabilities": 0,
+    "breakdown": { "critical": 0, "high": 0, "moderate": 0, "low": 0 }
+  },
+  "total_dependencies": 786,
+  "native_dependabot_prs_open": 0,
+  "applied_updates": [
+    {
+      "package": "prettier",
+      "from": "3.8.5",
+      "to": "3.9.0",
+      "type": "minor",
+      "reason": "Safe minor bump within ^3.8.5 range; no breaking changes in prettier minor versions; pnpm check passes cleanly",
+      "advisories": []
+    }
+  ],
+  "deferred_packages": [
+    { "package": "typescript", "current": "5.9.3", "latest": "6.0.3", "reason": "MAJOR version, pinned at exact 5.9.3 (no semver range) — intentionally locked; TypeScript 6.x breaking changes unknown, deferred pending release-notes review" },
+    { "package": "ai", "current": "6.0.208", "latest": "7.0.3", "reason": "Breaking: system->instructions, onFinish->onEnd; ESM-only; atomic group upgrade" },
+    { "package": "@ai-sdk/anthropic", "current": "3.0.85", "latest": "4.0.0", "reason": "ESM-only in v4; must co-upgrade with ai@7 and @ai-sdk/openai@4" },
+    { "package": "@ai-sdk/openai", "current": "3.0.74", "latest": "4.0.1", "reason": "ESM-only in v4; same atomic group as above" },
+    { "package": "express", "current": "4.22.2", "latest": "5.2.1", "reason": "path-to-regexp v8 breaking; req.param() removed; 15+ REST endpoints affected" },
+    { "package": "@types/express", "current": "4.17.21", "latest": "5.0.6", "reason": "Blocked on express@5 migration" },
+    { "package": "@types/node", "current": "24.13.1", "latest": "26.0.1", "reason": "Runtime is Node 22; v26 types surface non-existent APIs" },
+    { "package": "pnpm", "current": "10.34.4", "latest": "11.9.0", "reason": "HIGH RISK: v11 silently drops pnpm.overrides; migrate 19 CVE pins to pnpm-workspace.yaml first" },
+    { "package": "puppeteer", "current": "24.43.1", "latest": "25.2.1", "reason": "ESM-only; executablePath() becomes async; breaks server/draftPdfRoute.ts" }
+  ],
+  "active_overrides": 19,
+  "delta_from_run_141": {
+    "cves_pre_fix": "0 (unchanged — already clean)",
+    "cves_post_fix": "0 (unchanged)",
+    "applied_updates": "+1 (prettier minor patch)",
+    "deferred_packages": "+1 (typescript@6.0.3 newly available, deferred)",
+    "dependencies_count": "unchanged (786)"
+  }
+}
