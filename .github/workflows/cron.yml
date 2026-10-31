@@ -1,0 +1,58 @@
+name: Scheduled jobs
+
+# Vercel Hobby only allows daily cron jobs, so the frequent jobs are triggered
+# from here instead (best-effort: GitHub may delay or skip scheduled runs under
+# load). Vercel Cron in vercel.json is a daily backstop for the critical ones.
+#
+# Required repository secrets:
+#   APP_URL      e.g. https://www.talk-to-my-lawyer.com
+#   CRON_SECRET  same value as the CRON_SECRET env var on the Vercel project
+#
+# Keep the schedules in sync with server/cronScheduler.ts and
+# scripts/trigger-cron.sh (server/vercel-deploy.test.ts enforces this).
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
+    - cron: "0 * * * *"
+    - cron: "30 * * * *"
+    - cron: "0 */6 * * *"
+    - cron: "0 3 * * *"
+    - cron: "0 4 * * *"
+    - cron: "0 2 * * 0"
+    - cron: "30 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Run one job by name (e.g. draft-reminders) or 'drain'"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Don't stack runs of the same schedule if one is slow.
+    concurrency:
+      group: cron-${{ github.event.schedule || inputs.job }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/trigger-cron.sh
+          sparse-checkout-cone-mode: false
+      - name: Trigger
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+          JOB: ${{ inputs.job }}
+        run: |
+          if [ -n "$SCHEDULE" ]; then
+            bash scripts/trigger-cron.sh "$SCHEDULE"
+          else
+            bash scripts/trigger-cron.sh "job:$JOB"
+          fi

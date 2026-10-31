@@ -53,48 +53,19 @@ pnpm check          # TypeScript check (tsc --noEmit)
 
 ### Architecture
 
-The app is split into three independently runnable roles from a **single Docker image**:
+Vercel is the only production target:
 
-| Role | Command | Purpose |
-|------|---------|---------|
-| **app** | `pnpm start:app` | Express + tRPC web server, serves the React client |
-| **worker** | `pnpm start:worker` | pg-boss pipeline worker (consumes letter generation jobs) |
-| **migrate** | `pnpm start:migrate` | One-shot Drizzle ORM migration runner |
+| Part | Runs as |
+|------|---------|
+| React client | Static assets on Vercel's CDN (`dist/public`) |
+| Express + tRPC API | One Vercel function (`api/index.ts`) |
+| Letter pipeline | Started in that function right after submit (pg-boss queue, drained on demand) |
+| Scheduled jobs | GitHub Actions + daily Vercel Cron → `/api/internal/cron/:job` |
+| Migrations | Run automatically on **production** builds (`scripts/vercel-build.sh`) |
 
-**Deploy flow:**
-1. Build the image (`docker build .`)
-2. Run `migrate` (once, fail-fast if migrations fail)
-3. Start `app` and `worker` using the same image
+> Setup, env vars, Hobby-plan limits and operations: [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md).
 
-> Full deployment (Railway, Docker Compose, env vars): [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md).
-
-### Docker Compose (local / staging)
-
-```bash
-# Build the image
-docker compose build
-
-# Run migrations (one-shot, then exits)
-docker compose run --rm migrate
-
-# Start web server + worker
-docker compose up app worker
-
-# Or start everything including migrations:
-docker compose --profile ops up
-```
-
-The `migrate` service is under the `ops` profile so it doesn't run on every `docker compose up`. Run it explicitly before starting `app` and `worker`.
-
-For production-like settings with resource limits and replica counts:
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app worker
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale app=3 --scale worker=2
-```
-
-### Railway (production)
-
-> See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) §5 for complete Railway setup.
+Local development is unchanged: `pnpm dev`.
 
 ### Package scripts reference
 

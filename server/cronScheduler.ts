@@ -1,8 +1,16 @@
 /**
  * Cron Scheduler
  *
- * Registers in-process scheduled jobs using node-cron.
- * This runs inside the Express server process — no external scheduler needed.
+ * Single registry of every scheduled job (CRON_JOBS) plus two ways to trigger it:
+ *
+ *   - Long-running process (local dev / `pnpm start`): startCronScheduler()
+ *     registers each job with node-cron in-process.
+ *   - Vercel (serverless, no persistent process): jobs are invoked over HTTP via
+ *     server/cronRoutes.ts — GET/POST /api/internal/cron/:job — by Vercel Cron
+ *     (daily backstop) and the GitHub Actions scheduler (.github/workflows/cron.yml).
+ *
+ * Keep vercel.json crons and .github/workflows/cron.yml in sync with the
+ * `schedule` fields below (server/cronRoutes.test.ts enforces this).
  *
  * Jobs registered:
  *   - Draft Reminder: every hour at :00 — calls processDraftReminders()
@@ -122,9 +130,201 @@ export async function cleanupStalePipelineJobs(): Promise<{
   return { cancelled, errors };
 }
 
+// ─── Queue backlog alerting ──────────────────────────────────────────────────
+// Alerts admins if pipeline queue depth exceeds threshold.
+async function checkQueueBacklog(): Promise<Record<string, unknown>> {
+  const QUEUE_BACKLOG_THRESHOLD = parseInt(
+    process.env.QUEUE_BACKLOG_THRESHOLD ?? "10",
+    10
+  );
+  if (!isQueueConnectionConfigured()) {
+    logger.info("[Cron] Queue check skipped (not configured)");
+    return { skipped: true };
+  }
+  const boss = await getBoss();
+  const stats = await boss.getQueueStats(QUEUE_NAME);
+  const queuedCount = (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
+  const activeCount = stats?.activeCount ?? 0;
+
+  logger.info(`[Cron] Queue depth: ${queuedCount} queued, ${activeCount} active`);
+
+  if (queuedCount >= QUEUE_BACKLOG_THRESHOLD) {
+    logger.warn(
+      `[Cron] Queue backlog alert: ${queuedCount} queued (threshold: ${QUEUE_BACKLOG_THRESHOLD})`
+    );
+    const admins = await getAllUsers("admin");
+    for (const admin of admins) {
+      if (admin.email) {
+        try {
+          await sendJobFailedAlertEmail({
+            to: admin.email,
+            name: admin.name ?? "Admin",
+            letterId: 0,
+            jobType: "queue_backlog_alert",
+            errorMessage: `${queuedCount} pipeline jobs are backlogged (${activeCount} active). Threshold: ${QUEUE_BACKLOG_THRESHOLD}. Check that the queue drain cron (GitHub Actions) is running and consider raising QUEUE_DRAIN_CONCURRENCY.`,
+            appUrl: process.env.APP_URL ?? "",
+          });
+        } catch (emailErr) {
+          logger.error(
+            { err: emailErr },
+            "[Cron] Failed to send queue backlog alert email"
+          );
+        }
+      }
+      try {
+        await createNotification({
+          userId: admin.id,
+          type: "job_failed",
+          category: "system",
+          title: `Queue backlog alert: ${queuedCount} jobs pending`,
+          body: `Pipeline queue has ${queuedCount} queued jobs (${activeCount} active). Check that the queue drain cron is running.`,
+          link: "/admin/letters",
+        });
+      } catch (notifErr) {
+        logger.error(
+          { err: notifErr },
+          "[Cron] Failed to create queue backlog notification"
+        );
+      }
+    }
+  }
+  return { queued: queuedCount, active: activeCount };
+}
+
+// ─── Job registry ────────────────────────────────────────────────────────────
+
+export interface CronJobDef {
+  /** URL-safe job name used by /api/internal/cron/:job */
+  name: string;
+  /** 5-field cron expression (UTC) */
+  schedule: string;
+  /** Human description for logs/docs */
+  description: string;
+  run: () => Promise<unknown>;
+}
+
+export const CRON_JOBS: readonly CronJobDef[] = [
+  {
+    name: "draft-reminders",
+    schedule: "0 * * * *",
+    description: "Hourly draft reminder emails",
+    run: () => processDraftReminders(),
+  },
+  {
+    name: "subscription-sync",
+    schedule: "0 */6 * * *",
+    description: "Reconcile local subscription status with Stripe",
+    run: () => syncSubscriptionsWithStripe(),
+  },
+  {
+    name: "stripe-event-pruning",
+    schedule: "0 3 * * *",
+    description: "Prune processed Stripe webhook events older than 7 days",
+    run: async () => ({ deleted: await pruneProcessedStripeEvents() }),
+  },
+  {
+    // Releases letters under_review for 48+ hours back to pending_review
+    name: "stale-review-detection",
+    schedule: "30 * * * *",
+    description: "Release stale under_review letters",
+    run: () => releaseStaleReviews(),
+  },
+  {
+    // "Your draft is ready" email for letters at generated_locked >= 24h.
+    // Idempotent via draft_ready_email_sent.
+    name: "paywall-emails",
+    schedule: "*/15 * * * *",
+    description: "Draft-ready (paywall) email notifications",
+    run: () => processPaywallEmails(),
+  },
+  {
+    // First-letter free-preview "ready" email, 24h after submit.
+    // Idempotent via free_preview_email_sent_at.
+    name: "free-preview-emails",
+    schedule: "*/5 * * * *",
+    description: "Free-preview-ready email notifications",
+    run: () => processFreePreviewEmails(),
+  },
+  {
+    // Merges semantically similar lessons in scopes with 5+ active lessons
+    name: "lesson-consolidation",
+    schedule: "0 2 * * 0",
+    description: "Weekly lesson consolidation",
+    run: () => runAutomatedConsolidation(),
+  },
+  {
+    // Deactivates stale / ineffective / harmful lessons
+    name: "lesson-archival",
+    schedule: "30 2 * * 0",
+    description: "Weekly lesson auto-archival",
+    run: () => archiveIneffectiveLessons(),
+  },
+  {
+    // Resets letters stuck in researching/drafting with a stale pipeline lock
+    // so a fresh run is queued. This is also the recovery path when a
+    // serverless drain is killed at maxDuration mid-pipeline.
+    name: "stale-pipeline-lock-recovery",
+    schedule: "*/15 * * * *",
+    description: "Recover letters with stale pipeline locks",
+    run: () => recoverStalePipelineLocks(),
+  },
+  {
+    // Cancels queued/deferred pg-boss jobs for letters no longer actively generating
+    name: "stale-pipeline-job-cleanup",
+    schedule: "0 4 * * *",
+    description: "Nightly stale pipeline job cleanup",
+    run: () => cleanupStalePipelineJobs(),
+  },
+  {
+    name: "queue-backlog-alert",
+    schedule: "*/5 * * * *",
+    description: "Alert admins when the pipeline queue is backlogged",
+    run: () => checkQueueBacklog(),
+  },
+];
+
+export function getCronJob(name: string): CronJobDef | undefined {
+  return CRON_JOBS.find(j => j.name === name);
+}
+
+export interface CronRunOutcome {
+  job: string;
+  ok: boolean;
+  elapsedMs: number;
+  result?: unknown;
+  error?: string;
+}
+
 /**
- * Start all scheduled cron jobs.
+ * Run one registered job with uniform timing, logging and Sentry capture.
+ * Never throws — failures are reported in the returned outcome.
+ */
+export async function runCronJob(job: CronJobDef): Promise<CronRunOutcome> {
+  const startTime = Date.now();
+  logger.info(`[Cron] [${new Date().toISOString()}] Running ${job.name}...`);
+  try {
+    const result = await job.run();
+    const elapsedMs = Date.now() - startTime;
+    logger.info(
+      { result },
+      `[Cron] ${job.name} done in ${elapsedMs}ms`
+    );
+    return { job: job.name, ok: true, elapsedMs, result };
+  } catch (err) {
+    const elapsedMs = Date.now() - startTime;
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`[Cron] ${job.name} failed: ${msg}`);
+    captureServerException(err, {
+      tags: { component: "cron", job: job.name.replace(/-/g, "_") },
+    });
+    return { job: job.name, ok: false, elapsedMs, error: msg };
+  }
+}
+
+/**
+ * Start all scheduled cron jobs in-process (long-running server only).
  * Safe to call multiple times — subsequent calls are no-ops.
+ * Not used on Vercel — see server/cronRoutes.ts.
  */
 export function startCronScheduler(): void {
   if (process.env.NODE_ENV === "test") {
@@ -152,309 +352,14 @@ export function startCronScheduler(): void {
     }
   });
 
-  cron.schedule("0 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running draft reminders...`
-    );
-    try {
-      const result = await processDraftReminders();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Draft reminders done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Draft reminder job failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "draft_reminders" },
-      });
-    }
-  });
-
-  cron.schedule("0 */6 * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running subscription sync...`
-    );
-    try {
-      const result = await syncSubscriptionsWithStripe();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Subscription sync done in ${elapsed}ms — checked: ${result.checked}, corrected: ${result.corrected}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Subscription sync job failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "subscription_sync" },
-      });
-    }
-  });
-
-  cron.schedule("0 3 * * *", async () => {
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Pruning old Stripe events...`
-    );
-    try {
-      const deleted = await pruneProcessedStripeEvents();
-      logger.info(`[Cron] Pruned ${deleted} old Stripe events`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Stripe event pruning failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "stripe_event_pruning" },
-      });
-    }
-  });
-
-  // Stale review detection: runs every hour at :30
-  // Releases letters that have been under_review for 48+ hours back to pending_review
-  cron.schedule("30 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running stale review detection...`
-    );
-    try {
-      const result = await releaseStaleReviews();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Stale review detection done in ${elapsed}ms — released: ${result.released}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Stale review detection failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "stale_review_detection" },
-      });
-    }
-  });
-
-  // Draft-ready email notification: runs every 15 minutes.
-  // Sends "Your draft is ready — view and submit for review" to subscribers
-  // whose letter reached generated_locked status ≥24 hours ago.
-  // Idempotent: draft_ready_email_sent = true prevents duplicate sends.
-  cron.schedule("*/15 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running paywall email notifications...`
-    );
-    try {
-      const result = await processPaywallEmails();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Paywall emails done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Paywall email job failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "paywall_emails" },
-      });
-    }
-  });
-
-  // Free-preview-ready email notification: runs every 5 minutes
-  // Sends the "your draft is ready to preview" email to subscribers on the
-  // first-letter free-preview lead-magnet path, 24 hours after their submit.
-  // Idempotent: free_preview_email_sent_at column prevents duplicate sends.
-  cron.schedule("*/5 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running free-preview-ready emails...`
-    );
-    try {
-      const result = await processFreePreviewEmails();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Free-preview emails done in ${elapsed}ms — sent: ${result.sent}, skipped: ${result.skipped}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Free-preview email job failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "free_preview_emails" },
-      });
-    }
-  });
-
-  // Lesson consolidation: runs weekly on Sundays at 02:00
-  // Iterates over (letter_type, jurisdiction) scopes with 5+ active lessons
-  // and merges semantically similar lessons to prevent prompt bloat.
-  cron.schedule("0 2 * * 0", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running lesson consolidation...`
-    );
-    try {
-      const result = await runAutomatedConsolidation();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Lesson consolidation done in ${elapsed}ms — scopes: ${result.scopesProcessed}, consolidated: ${result.totalConsolidated}, deactivated: ${result.totalDeactivated}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Lesson consolidation failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "lesson_consolidation" },
-      });
-    }
-  });
-
-  // Lesson auto-archival: runs weekly on Sundays at 02:30
-  // Deactivates stale/ineffective lessons: old with zero injections,
-  // proven harmful (after-score < before-score), or low weight with no recent injections.
-  cron.schedule("30 2 * * 0", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running lesson auto-archival...`
-    );
-    try {
-      const result = await archiveIneffectiveLessons();
-      const elapsed = Date.now() - startTime;
-      const reasonSummary = Object.entries(result.reasons)
-        .map(([r, c]) => `${r}: ${c}`)
-        .join(", ");
-      logger.info(
-        `[Cron] Lesson auto-archival done in ${elapsed}ms — archived: ${result.archived}${reasonSummary ? ` (${reasonSummary})` : ""}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Lesson auto-archival failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "lesson_archival" },
-      });
-    }
-  });
-
-  // Stale pipeline lock recovery: runs every 15 minutes
-  // Detects letters stuck in researching/drafting with a stale pipeline lock
-  // and resets them to submitted for a fresh pipeline run.
-  cron.schedule("*/15 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running stale pipeline lock recovery...`
-    );
-    try {
-      const result = await recoverStalePipelineLocks();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Stale pipeline lock recovery done in ${elapsed}ms — recovered: ${result.recovered}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Stale pipeline lock recovery failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "stale_pipeline_lock_recovery" },
-      });
-    }
-  });
-
-  // Stale pipeline job cleanup: runs nightly at 04:00
-  // Cancels any queued/deferred pg-boss jobs for letters that are no longer
-  // in an actively-generating status (guards against missed cancellations).
-  cron.schedule("0 4 * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Running stale pipeline job cleanup...`
-    );
-    try {
-      const result = await cleanupStalePipelineJobs();
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Stale pipeline job cleanup done in ${elapsed}ms — cancelled: ${result.cancelled}, errors: ${result.errors}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Stale pipeline job cleanup failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "stale_pipeline_job_cleanup" },
-      });
-    }
-  });
-
-  // Queue backlog alerting: runs every 5 minutes
-  // Alerts admins if pipeline queue depth exceeds threshold.
-  const QUEUE_BACKLOG_THRESHOLD = parseInt(
-    process.env.QUEUE_BACKLOG_THRESHOLD ?? "10",
-    10
-  );
-  cron.schedule("*/5 * * * *", async () => {
-    const startTime = Date.now();
-    logger.info(
-      `[Cron] [${new Date().toISOString()}] Checking queue backlog...`
-    );
-    try {
-      if (!isQueueConnectionConfigured()) {
-        logger.info("[Cron] Queue check skipped (not configured)");
-        return;
-      }
-      const boss = await getBoss();
-      const stats = await boss.getQueueStats(QUEUE_NAME);
-      const queuedCount =
-        (stats?.queuedCount ?? 0) + (stats?.deferredCount ?? 0);
-      const activeCount = stats?.activeCount ?? 0;
-
-      logger.info(
-        `[Cron] Queue depth: ${queuedCount} queued, ${activeCount} active`
-      );
-
-      if (queuedCount >= QUEUE_BACKLOG_THRESHOLD) {
-        logger.warn(
-          `[Cron] Queue backlog alert: ${queuedCount} queued (threshold: ${QUEUE_BACKLOG_THRESHOLD})`
-        );
-        const admins = await getAllUsers("admin");
-        for (const admin of admins) {
-          if (admin.email) {
-            try {
-              await sendJobFailedAlertEmail({
-                to: admin.email,
-                name: admin.name ?? "Admin",
-                letterId: 0,
-                jobType: "queue_backlog_alert",
-                errorMessage: `${queuedCount} pipeline jobs are backlogged (${activeCount} active). Threshold: ${QUEUE_BACKLOG_THRESHOLD}. Consider increasing WORKER_CONCURRENCY or scaling the service.`,
-                appUrl: process.env.APP_URL ?? "",
-              });
-            } catch (emailErr) {
-              logger.error(
-                { err: emailErr },
-                "[Cron] Failed to send queue backlog alert email"
-              );
-            }
-          }
-          try {
-            await createNotification({
-              userId: admin.id,
-              type: "job_failed",
-              category: "system",
-              title: `Queue backlog alert: ${queuedCount} jobs pending`,
-              body: `Pipeline queue has ${queuedCount} queued jobs (${activeCount} active). Consider increasing WORKER_CONCURRENCY or scaling the service.`,
-              link: "/admin/letters",
-            });
-          } catch (notifErr) {
-            logger.error(
-              { err: notifErr },
-              "[Cron] Failed to create queue backlog notification"
-            );
-          }
-        }
-      }
-
-      const elapsed = Date.now() - startTime;
-      logger.info(
-        `[Cron] Queue backlog check done in ${elapsed}ms — queued: ${queuedCount}, active: ${activeCount}`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(`[Cron] Queue backlog check failed: ${msg}`);
-      captureServerException(err, {
-        tags: { component: "cron", job: "queue_backlog_alert" },
-      });
-    }
-  });
+  for (const job of CRON_JOBS) {
+    cron.schedule(job.schedule, () => {
+      void runCronJob(job);
+    });
+  }
 
   logger.info(
-    "[Cron] Registered: draft-reminders (every hour), subscription-sync (every 6h), event-pruning (daily 03:00), stale-review-detection (every hour at :30), draft-ready-emails (every 15 min / 24h delay), free-preview-emails (every 5 min), lesson-consolidation (weekly Sun 02:00), lesson-archival (weekly Sun 02:30), stale-pipeline-lock-recovery (every 15 min), stale-pipeline-job-cleanup (daily 04:00 + startup), queue-backlog-alert (every 5 min)"
+    `[Cron] Registered: ${CRON_JOBS.map(j => `${j.name} (${j.schedule})`).join(", ")}`
   );
 }
 

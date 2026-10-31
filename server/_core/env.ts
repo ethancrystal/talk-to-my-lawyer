@@ -21,6 +21,8 @@ export const ENV = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   stripePublishableKey: process.env.VITE_STRIPE_PUBLISHABLE_KEY ?? "",
+  // Shared secret for /api/internal/* scheduled triggers (Vercel Cron + GitHub Actions)
+  cronSecret: process.env.CRON_SECRET ?? "",
   // Upstash Redis (rate limiting + job queue)
   upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL ?? "",
   upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
@@ -80,7 +82,7 @@ export function validateRequiredEnv(): void {
   if (missing.length > 0) {
     throw new Error(
       `[Startup] Missing required environment variables: ${missing.join(", ")}\n` +
-        "Server cannot start without these. Check your Railway / .env configuration."
+        "Server cannot start without these. Check the Vercel project environment variables (or .env locally)."
     );
   }
 }

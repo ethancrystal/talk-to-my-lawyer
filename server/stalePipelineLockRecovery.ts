@@ -29,7 +29,12 @@ import { createLogger } from "./logger";
 const recoveryLogger = createLogger({ module: "StaleLockRecovery" });
 
 /** 60 minutes — matches queue job expiry (expireInSeconds in queue.ts) */
-const STALE_LOCK_THRESHOLD_MS = 60 * 60 * 1000;
+// On Vercel a function is killed at maxDuration (<= 300s), so a lock older than
+// ~10 minutes cannot belong to a live run — recover it quickly instead of
+// leaving the letter stuck for an hour. Long-running workers keep 60 minutes.
+const STALE_LOCK_THRESHOLD_MS = process.env.VERCEL
+  ? 10 * 60 * 1000
+  : 60 * 60 * 1000;
 
 export interface StaleLockRecoveryResult {
   recovered: number;

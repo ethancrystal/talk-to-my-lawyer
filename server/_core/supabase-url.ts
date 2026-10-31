@@ -1,12 +1,12 @@
 /**
- * Normalize Supabase connection strings for Railway's IPv4-only network.
+ * Normalize Supabase connection strings for IPv4-only networks.
  *
- * Railway's container network can't reach Supabase's direct DB host
+ * IPv4-only networks (including serverless hosts) can't reach Supabase's direct DB host
  * (`db.<PROJECT_REF>.supabase.co`) — that hostname has only AAAA records, no
  * A records, so any IPv4-only egress fails with `ENETUNREACH` for IPv6
  * addresses or `ENODATA` for IPv4 lookups.
  *
- * Worse, Railway's Supabase integration / reference-variable sync
+ * Worse, A Supabase integration / reference-variable sync
  * intermittently rewrites `DATABASE_URL`, `SUPABASE_DIRECT_URL`, and
  * `SUPABASE_DATABASE_URL` from the pooler form back to the direct form (e.g.
  * after a Supabase password rotation). The web service silently 401s on
@@ -62,7 +62,7 @@ export function normalizeSupabaseUrlForPooler(rawUrl: string): string {
         .replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
       logger.warn(
         { rewrittenTo: masked, projectRef },
-        "[SupabaseUrl] Auto-rewriting direct Supabase URL (db.*.supabase.co) to pooler form. Railway is IPv4-only; the direct host is IPv6-only and unreachable. Set SUPABASE_POOLER_HOST to override the default region."
+        "[SupabaseUrl] Auto-rewriting direct Supabase URL (db.*.supabase.co) to pooler form. The host network is IPv4-only; the direct host is IPv6-only and unreachable. Set SUPABASE_POOLER_HOST to override the default region."
       );
       return url.toString();
     }

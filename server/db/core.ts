@@ -26,7 +26,7 @@ export async function getDb() {
     process.env.SUPABASE_DIRECT_URL ||
     process.env.SUPABASE_DATABASE_URL ||
     process.env.DATABASE_URL;
-  // Defensive: if Railway/Supabase auto-syncs reverted the URL to the
+  // Defensive: if a Supabase integration sync reverted the URL to the
   // IPv6-only direct host, rewrite it to the pooler form at connect time.
   // See server/_core/supabase-url.ts for context.
   const dbUrl = rawUrl ? normalizeSupabaseUrlForPooler(rawUrl) : rawUrl;
@@ -37,7 +37,7 @@ export async function getDb() {
         // Primary pool: writes + consistency-sensitive reads only.
         // Read-heavy paths (analytics, blog, admin, lessons) use getReadDb() → replica.
         // Keep this small to leave headroom for pg-boss + replica pool.
-        max: parseInt(process.env.DB_POOL_MAX ?? "10", 10),
+        max: parseInt(process.env.DB_POOL_MAX ?? (process.env.VERCEL ? "3" : "10"), 10),
         idle_timeout: 20,
         connect_timeout: 10,
       });
@@ -60,13 +60,13 @@ export async function getReadDb() {
     return getDb();
   }
   // Apply the same defensive normalization to the read replica URL in case
-  // Railway syncs revert it to the direct host.
+  // an integration sync reverts it to the direct host.
   const replicaUrl = normalizeSupabaseUrlForPooler(rawReplicaUrl);
 
   try {
     const client = postgres(replicaUrl, {
       ssl: needsSsl(replicaUrl) ? "require" : false,
-      max: parseInt(process.env.DB_READ_POOL_MAX ?? "15", 10),
+      max: parseInt(process.env.DB_READ_POOL_MAX ?? (process.env.VERCEL ? "3" : "15"), 10),
       idle_timeout: 20,
       connect_timeout: 10,
     });

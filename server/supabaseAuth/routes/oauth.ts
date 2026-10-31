@@ -34,7 +34,7 @@ const PKCE_COOKIE_OPTIONS = {
   path: "/",
 };
 
-/** Serialize any error value to a loggable string for Railway log visibility */
+/** Serialize any error value to a loggable string for log visibility */
 function serializeError(err: unknown): string {
   if (err instanceof Error) return `${err.name}: ${err.message}${err.stack ? `\n${err.stack}` : ""}`;
   try { return JSON.stringify(err); } catch { return String(err); }

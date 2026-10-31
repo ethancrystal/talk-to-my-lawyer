@@ -34,7 +34,7 @@ export function getSessionCookieOptions(
 ): Pick<CookieOptions, "httpOnly" | "path" | "sameSite" | "secure"> {
   // CRITICAL: For SameSite: "none" to work, the cookie MUST be Secure: true.
   // Browsers (Chrome, Safari) will silently reject a SameSite: "none" cookie
-  // that is not Secure. Since this app is production-only on Railway with HTTPS,
+  // that is not Secure. Since this app is production-only on Vercel with HTTPS,
   // we force secure: true regardless of local protocol detection to ensure
   // cross-site OAuth redirects always work.
   return {

@@ -25,7 +25,7 @@ const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
  * Explicit allowlist of hosts permitted to originate auth emails / redirects.
  *
  * Historically this file contained wildcard regexes (`*.railway.app`,
- * `*.replit.dev`, `*-*-*.janeway.replit.dev`) which meant ANY deployment on
+ * `*.replit.dev`) which meant ANY deployment on
  * those providers — including ones owned by unrelated parties — could set an
  * `Origin` / `X-Forwarded-Host` header we would trust. That's a redirect /
  * phishing primitive: attacker-controlled subdomain → legit Supabase auth
@@ -33,14 +33,18 @@ const CANONICAL_DOMAIN = "https://www.talk-to-my-lawyer.com";
  *
  * Starting with this change:
  *  - Only the canonical production hosts are allowed by default.
- *  - Additional hosts (e.g. the specific Railway service hosts, a preview
- *    Replit URL) must be added explicitly via the `ALLOWED_ORIGIN_HOSTS`
- *    environment variable as a comma-separated list.
+ *  - This project's own Vercel production alias (`VERCEL_PROJECT_PRODUCTION_URL`,
+ *    set by the platform — not by the request) is allowed.
+ *  - Additional hosts (e.g. a specific preview URL) must be added explicitly via
+ *    the `ALLOWED_ORIGIN_HOSTS` environment variable as a comma-separated list.
  *  - No wildcards, ever.
  */
 const ALLOWED_ORIGIN_HOSTS: ReadonlySet<string> = new Set<string>([
   "www.talk-to-my-lawyer.com",
   "talk-to-my-lawyer.com",
+  ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? [process.env.VERCEL_PROJECT_PRODUCTION_URL.toLowerCase()]
+    : []),
   ...(process.env.ALLOWED_ORIGIN_HOSTS ?? "")
     .split(",")
     .map((h) => h.trim().toLowerCase())

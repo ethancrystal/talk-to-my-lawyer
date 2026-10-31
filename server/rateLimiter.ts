@@ -117,9 +117,9 @@ function getDocumentAnalysisLimiter(): Ratelimit | null {
 export function getClientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
-    // Railway appends its own trusted proxy IP as the rightmost value.
-    // The client IP is the leftmost value (set by the first proxy in the chain).
-    // We take the leftmost to identify the real originating client.
+    // Vercel overwrites X-Forwarded-For with the real client IP (it does not
+    // pass through client-supplied values), so the leftmost entry is the
+    // originating client. Do not reuse this behind a proxy that appends.
     const ips = Array.isArray(forwarded) ? forwarded : forwarded.split(",");
     return ips[0].trim();
   }

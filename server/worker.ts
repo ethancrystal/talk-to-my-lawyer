@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-// Force IPv4 DNS resolution — Railway's network cannot reach Supabase's
+// Force IPv4 DNS resolution — some hosts cannot reach Supabase's
 // shared pooler via IPv6 (ENETUNREACH). This must be set before any
 // database connections are established.
 import dns from "node:dns";
@@ -9,6 +9,7 @@ dns.setDefaultResultOrder("ipv4first");
 import { initServerSentry } from "./sentry";
 initServerSentry();
 
+import { pathToFileURL } from "node:url";
 import type { Job } from "pg-boss";
 import {
   QUEUE_NAME,
@@ -912,7 +913,15 @@ async function startWorker() {
   );
 }
 
-startWorker().catch(err => {
-  logger.error({ err: err }, "[Worker] Failed to start:");
-  process.exit(1);
-});
+// Only boot the long-running consumer when this file is the process entry point
+// (`tsx server/worker.ts` / `node dist/worker.js`). On Vercel the module is
+// imported by server/queueDrain.ts for processJob() and must not start a worker.
+const isEntryPoint =
+  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntryPoint) {
+  startWorker().catch(err => {
+    logger.error({ err: err }, "[Worker] Failed to start:");
+    process.exit(1);
+  });
+}

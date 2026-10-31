@@ -48,7 +48,7 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 | **Rate Limiting** | Upstash Redis (`@upstash/ratelimit`) |
 | **File Storage** | Cloudflare R2 (S3-compatible) |
 | **Monitoring** | Sentry (frontend + backend), Pino structured logger |
-| **Deployment** | Railway (Docker multi-stage build), Kubernetes configs in `k8s/` |
+| **Deployment** | Vercel only (static client on CDN + one Express function + GitHub Actions scheduler) — see `docs/VERCEL_DEPLOYMENT.md` |
 
 ---
 
@@ -96,8 +96,7 @@ The application is a single TypeScript monorepo with a React frontend, Express b
 ├── e2e/                  # Playwright end-to-end tests
 ├── attached_assets/      # HTML letter templates loaded at runtime (PDF generation)
 ├── docs/                 # Architecture docs, runbooks, feature maps
-├── cloudflare/           # Cloudflare Worker source (affiliate, KV, email, PDF)
-├── k8s/                  # Kubernetes manifests (alternative to Railway)
+├── api/                  # Vercel function entry (api/index.ts → createApp())
 └── scripts/              # Utility scripts (seed users, backfill, etc.)
 ```
 
@@ -256,7 +255,7 @@ Super admin emails are hard-coded in `server/supabaseAuth.ts` (`SUPER_ADMIN_EMAI
 - Uses `pg` (node-postgres) driver.
 - `DATABASE_URL` is the primary connection string.
 - `SUPABASE_DIRECT_URL` (port 5432) is recommended for pg-boss queue operations.
-- `dns.setDefaultResultOrder("ipv4first")` is forced at startup to avoid IPv6 issues with Supabase pooler on Railway.
+- `dns.setDefaultResultOrder("ipv4first")` is forced at startup to avoid IPv6 issues with the Supabase pooler.
 
 ---
 
@@ -460,30 +459,14 @@ Must be prefixed with `VITE_` to be available via `import.meta.env.VITE_*`:
 
 ## 14. Deployment Architecture
 
-### 14.1 Multi-Service Docker Image
-One Docker image supports three runtime roles via `PROCESS_TYPE` env var (dispatched by `docker-entrypoint.sh`):
+### 14.1 Vercel (only production target)
+Full details in [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md).
 
-| Role | `PROCESS_TYPE` | Command | Purpose |
-|------|----------------|---------|---------|
-| Web | `web` (default) | `node --import ./dist/instrument.js dist/index.js` | Express + tRPC + static client |
-| Worker | `worker` | `node --import ./dist/instrument.js dist/worker.js` | pg-boss pipeline job consumer |
-| Migrate | `migrate` | `node dist/migrate.js` | One-shot Drizzle migration |
-
-A legacy `all` mode also exists for single-container local runs (runs migrate, then worker in background, then web).
-
-### 14.2 Railway (Production)
-- Create **three services** from the same repo.
-- `ttml-app` (web) receives HTTP traffic on `PORT=8080`, health check `/api/health`.
-- `ttml-worker` is headless — no domain, no health check.
-- `ttml-migrate` restart policy = `Never` (runs once per deploy).
-- **Deploy order:** migrate first → then web + worker.
-
-### 14.3 Docker Compose (Local / Staging)
-```bash
-docker compose build
-docker compose run --rm migrate      # one-shot migrations
-docker compose up app worker         # start web + worker
-```
+- Client: static `dist/public` on the CDN; API: one function (`api/index.ts`) built from `server/_core/app.ts` (`createApp()`), shared with the local server in `server/_core/index.ts`.
+- No persistent process: the pg-boss worker is replaced by `server/queueDrain.ts` (kicked after enqueue via `waitUntil`, plus scheduled drains); `node-cron` is replaced by HTTP triggers `/api/internal/cron/:job` (registry in `server/cronScheduler.ts`, auth `CRON_SECRET`, fail-closed).
+- Scheduler: GitHub Actions (`.github/workflows/cron.yml`, `scripts/trigger-cron.sh`) because Hobby Vercel Cron is daily only; `vercel.json` crons are a daily backstop.
+- Migrations: `scripts/vercel-build.sh`, production builds only.
+- Hobby limits: 300 s function cap, 4.5 MB request body — see the doc.
 
 ### 14.4 Build Process
 ```
@@ -528,7 +511,7 @@ Express JSON/urlencoded limit is **12 MB** to accommodate large legal document u
 - The `SUPABASE_SERVICE_ROLE_KEY` is **server-only** — never expose to the client.
 
 ### 15.6 CORS
-Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-lawyer.com`), any `*.railway.app`, any `*.replit.dev`, `localhost` (dev only), and `CORS_ALLOWED_ORIGINS` env var.
+Allowed origins: production domains (`talk-to-my-lawyer.com`, `www.talk-to-my-lawyer.com`), this deployment's own Vercel hosts (`VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_PROJECT_PRODUCTION_URL`), `localhost` (dev only), and `CORS_ALLOWED_ORIGINS` env var. No `*.vercel.app` wildcard.
 
 ---
 

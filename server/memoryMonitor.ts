@@ -124,7 +124,7 @@ function checkForLeak(current: MemorySnapshot): void {
         },
       }
     );
-    // Graceful restart: worker will exit, Railway/supervisor will restart
+    // Graceful restart: worker will exit, the process supervisor will restart
     setTimeout(() => process.exit(1), 5000);
   }
 }

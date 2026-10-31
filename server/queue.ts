@@ -43,6 +43,10 @@ interface PgBossConstructorOptions {
   connectionString: string;
   ssl?: { rejectUnauthorized: boolean };
   schedule?: boolean;
+  /** Connection pool size for this pg-boss instance. */
+  max?: number;
+  /** Run the maintenance supervisor on a timer (disabled on serverless). */
+  supervise?: boolean;
 }
 
 interface PgBossCreateQueueOptions {
@@ -75,6 +79,19 @@ interface PgBossClient {
   getQueueStats(queueName: string): Promise<PgBossQueueStats | undefined>;
   findJobs<T = unknown>(queueName: string): Promise<Array<PgBossFoundJob<T>>>;
   cancel(queueName: string, id: string | string[]): Promise<void>;
+  /** Pull jobs on demand (used by the serverless drain instead of work()). */
+  fetch<T>(
+    queueName: string,
+    options?: { batchSize?: number }
+  ): Promise<Array<Job<T>>>;
+  complete(queueName: string, id: string | string[]): Promise<unknown>;
+  fail(
+    queueName: string,
+    id: string | string[],
+    data?: object | null
+  ): Promise<unknown>;
+  /** Run queue maintenance once (expire stuck jobs, archive, delete). */
+  supervise(queueName?: string): Promise<void>;
   work<T>(
     queueName: string,
     options: { localConcurrency?: number },
@@ -89,8 +106,8 @@ const PgBoss: { new(options: PgBossConstructorOptions): PgBossClient } =
   };
 import { logger } from "./logger";
 
-// Force Node.js to prefer IPv4 addresses globally — Railway resolves
-// Supabase pooler hostnames to IPv6 which is unreachable from Railway's network
+// Force Node.js to prefer IPv4 addresses globally — Supabase pooler hostnames
+// can resolve to IPv6 which is unreachable from some hosting networks
 dns.setDefaultResultOrder("ipv4first");
 
 export const QUEUE_NAME = "multi-agent-pipeline";
@@ -148,10 +165,10 @@ export function isQueueConnectionConfigured(): boolean {
 /**
  * If a Supabase connection string points to the IPv6-only direct host
  * (`db.<PROJECT_REF>.supabase.co`), rewrite it to the session pooler
- * (`<region>.pooler.supabase.com:5432`) so it works on Railway's IPv4-only
+ * (`<region>.pooler.supabase.com:5432`) so it works on IPv4-only
  * network. The session pooler supports LISTEN/NOTIFY, which pg-boss needs.
  *
- * This exists because Railway's Supabase integration / reference-variable
+ * This exists because a Supabase integration / reference-variable
  * sync intermittently overwrites pooler URLs back to direct URLs on deploy
  * (e.g. after a Supabase password rotation). Normalizing in code makes the
  * worker robust regardless of which form the env var lands in.
@@ -184,7 +201,7 @@ function normalizeSupabaseUrlForPooler(rawUrl: string): string {
       const masked = url.toString().replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
       logger.warn(
         { rewrittenTo: masked, projectRef },
-        "[Queue] Auto-rewriting direct Supabase URL (db.*.supabase.co) to pooler form. Railway is IPv4-only; the direct host is IPv6-only and unreachable. Set SUPABASE_POOLER_HOST to override the default region."
+        "[Queue] Auto-rewriting direct Supabase URL (db.*.supabase.co) to pooler form. The host network is IPv4-only; the direct host is IPv6-only and unreachable. Set SUPABASE_POOLER_HOST to override the default region."
       );
       return url.toString();
     }
@@ -215,7 +232,7 @@ function getConnectionString(): string {
   }
 
   // Normalize direct → pooler so the worker stays connected even when
-  // Railway/Supabase auto-syncs revert env vars to direct form.
+  // Supabase integration syncs can revert env vars to direct form.
   const url = normalizeSupabaseUrlForPooler(rawUrl);
 
   const masked = url.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
@@ -237,7 +254,7 @@ function getConnectionString(): string {
 
 /**
  * Resolve the hostname in a PostgreSQL connection string to an IPv4 address.
- * This is needed because Railway's network resolves Supabase pooler hostnames
+ * This is needed because some hosting networks resolve Supabase pooler hostnames
  * to IPv6 addresses that are unreachable (ENETUNREACH).
  */
 async function resolveConnectionToIPv4(
@@ -261,7 +278,7 @@ async function resolveConnectionToIPv4(
     // failed for user "postgres"`. We rely on `dns.setDefaultResultOrder(
     // "ipv4first")` (set in worker.ts) to prefer A records at connect time
     // — which keeps the hostname intact while still avoiding the IPv6
-    // ENETUNREACH on Railway.
+    // ENETUNREACH on IPv4-only hosts.
     if (hostname.endsWith(".pooler.supabase.com")) {
       logger.info(
         { hostname },
@@ -295,7 +312,7 @@ export async function getBoss(): Promise<PgBossClient> {
 
   _bossStarting = (async () => {
     const rawConnectionString = getConnectionString();
-    // Resolve hostname to IPv4 to avoid ENETUNREACH on Railway
+    // Resolve hostname to IPv4 to avoid ENETUNREACH on IPv4-only hosts
     const connectionString = await resolveConnectionToIPv4(rawConnectionString);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -303,6 +320,15 @@ export async function getBoss(): Promise<PgBossClient> {
       connectionString,
       ssl: { rejectUnauthorized: false },
       schedule: false,
+      // Serverless: every function instance opens its own pool, so keep it
+      // tiny, and run maintenance on demand (drainPipelineQueue) rather than
+      // from a per-instance timer.
+      ...(process.env.VERCEL
+        ? {
+            max: parseInt(process.env.PG_BOSS_POOL_MAX ?? "2", 10),
+            supervise: false,
+          }
+        : {}),
     };
     const boss = new PgBoss(pgBossOptions);
 
@@ -461,7 +487,26 @@ export async function enqueuePipelineJobImpl(
   logger.info(
     `[Queue] Enqueued pipeline job ${id} for letter #${normalizedData.letterId} (${normalizedData.label})`
   );
+  // Serverless: nothing is polling the queue, so start draining now. Deferred
+  // jobs (startAfter) are picked up by the scheduled drain once they are due.
+  if (!options?.startAfter) {
+    await kickDrain();
+  }
   return id!;
+}
+
+/**
+ * Start a background queue drain on Vercel. Imported lazily because
+ * queueDrain -> worker -> queue would otherwise be a circular import.
+ */
+async function kickDrain(): Promise<void> {
+  if (!process.env.VERCEL) return;
+  try {
+    const { kickQueueDrain } = await import("./queueDrain");
+    kickQueueDrain();
+  } catch (err) {
+    logger.error({ err }, "[Queue] Failed to kick queue drain (scheduled drain will pick the job up)");
+  }
 }
 
 export async function enqueueDraftPreviewReleaseJob(
@@ -550,6 +595,7 @@ export async function enqueueRetryFromStageJob(
   logger.info(
     `[Queue] Enqueued retry-from-stage job ${id} for letter #${data.letterId} (stage: ${data.stage})`
   );
+  await kickDrain();
   return id!;
 }
 

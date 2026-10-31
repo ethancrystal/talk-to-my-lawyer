@@ -1,0 +1,9 @@
+# Not needed at build or runtime on Vercel
+e2e/
+docs/
+skills/
+skills-audit/
+plugins/
+attached_assets/*.txt
+.github/
+*.md

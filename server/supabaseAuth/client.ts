@@ -14,10 +14,10 @@ export const SUPER_ADMIN_EMAILS = ["ravivo@homes.land", "moizj00@gmail.com"] as 
 export const SUPABASE_SESSION_COOKIE = "sb_session";
 
 export const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-// SUPABASE_ANON_KEY is the canonical server-side runtime variable (set in Railway).
+// SUPABASE_ANON_KEY is the canonical server-side runtime variable (set in the Vercel project env).
 // VITE_SUPABASE_ANON_KEY / VITE_SUPABASE_PUBLISHABLE_KEY are Vite build-time vars
 // baked into the frontend bundle — they are NOT automatically available as server
-// runtime env vars on Railway, causing supabaseAnonKey to be "" in production
+// runtime env vars, causing supabaseAnonKey to be "" in production
 // and breaking the PKCE token exchange in the Google OAuth callback.
 export const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY ||

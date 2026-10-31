@@ -58,10 +58,9 @@ interface PdfGenerationOptions {
  * Resolve the Chrome/Chromium executable path.
  *
  * Priority order:
- *  1. PUPPETEER_EXECUTABLE_PATH env var — set this in Railway/Render for a custom binary
- *  2. System `chromium` binary — installed via Nix on Replit and needed because the Nix
- *     environment links its own glibc, so the Puppeteer-bundled Chrome lacks the required
- *     shared libraries (libglib, libnss, etc.) that only exist within Nix's closure.
+ *  1. PUPPETEER_EXECUTABLE_PATH env var — set this to use a custom binary
+ *  2. System `chromium` binary — preferred when present (e.g. Nix/Docker dev setups
+ *     where the Puppeteer-bundled Chrome lacks required shared libraries).
  *  3. Puppeteer's bundled Chrome — works in standard Linux environments where the
  *     postinstall successfully downloads Chrome and system libraries are compatible.
  */
@@ -86,6 +85,18 @@ function resolveChromiumPath(): string {
  * --no-sandbox and --disable-setuid-sandbox are required for container deployments.
  */
 async function launchBrowser() {
+  // Vercel functions have no system Chrome: use the serverless Chromium build
+  // from @sparticuz/chromium (decompressed to /tmp on first use).
+  if (process.env.VERCEL) {
+    const { default: chromium } = await import("@sparticuz/chromium");
+    const executablePath = await chromium.executablePath();
+    logger.info(`[PDF] Launching serverless Chromium: ${executablePath}`);
+    return puppeteer.launch({
+      headless: true,
+      executablePath,
+      args: chromium.args,
+    });
+  }
   const executablePath = resolveChromiumPath();
   logger.info(`[PDF] Launching local Chromium: ${executablePath}`);
   return puppeteer.launch({

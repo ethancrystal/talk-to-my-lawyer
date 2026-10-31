@@ -34,7 +34,7 @@
 | Rich Text Editing      | Tiptap (attorney review)                                                                 |
 | PDF Generation         | PDFKit (server-side)                                                                     |
 | Monitoring             | Sentry (frontend + backend) + Pino structured logger                                     |
-| Deployment             | Railway (Docker multi-stage build)                                                       |
+| Deployment             | Vercel (static CDN + Express function; see docs/VERCEL_DEPLOYMENT.md)                   |
 
 ---
 

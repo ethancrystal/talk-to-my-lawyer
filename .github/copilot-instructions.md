@@ -54,7 +54,7 @@ The anti-hallucination pipeline should be robust, with clear flagging for unveri
 - **Database Architecture**: Uses a primary + read replica topology with transparent fallback.
 - **Health Check & Monitoring**: Public `/health` and admin `/health/details` endpoints check database, Redis (rate limiting only), Stripe, Resend, Anthropic, OpenAI, Cloudflare R2.
 - **Error Tracking**: Sentry.
-- **Deployment**: Railway (previously); now also runs on Replit.
+- **Deployment**: Vercel only — see `docs/VERCEL_DEPLOYMENT.md`.
 
 ### Replit Environment Configuration
 - **Primary workflow**: `Start application` — runs `npm run dev` on port 5000 (webview)

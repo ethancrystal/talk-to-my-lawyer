@@ -1,5 +1,7 @@
 # TTML Production Runbook — talk-to-my-lawyer.com
 
+> **Deployment is now Vercel-only.** Follow [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) for hosting, scheduling and migrations. Railway, Docker and Cloudflare-proxy steps below are **legacy** and kept only for their env-var, Supabase, Stripe and DNS checklists.
+
 **Status as of 2026-05-07:** Active. Database migrated to Supabase project `uqkqathpcthzuqhwraco`. Custom migrations and RLS policies applied.
 
 > **For tech stack overview:** See [`AGENTS.md`](../AGENTS.md) §2  

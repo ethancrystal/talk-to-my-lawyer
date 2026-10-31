@@ -322,15 +322,16 @@ describe("Server entry Sentry setup", () => {
   it("server entry calls initServerSentry() early", () => {
     const content = fs.readFileSync(indexPath, "utf-8");
     expect(content).toContain("initServerSentry()");
-    // Should be before express import
+    // Should be before the app module (which imports express) is loaded
     const sentryIndex = content.indexOf("initServerSentry()");
-    const expressIndex = content.indexOf('import express from "express"');
-    expect(sentryIndex).toBeLessThan(expressIndex);
+    const appIndex = content.indexOf('import { createApp } from "./app"');
+    expect(appIndex).toBeGreaterThan(-1);
+    expect(sentryIndex).toBeLessThan(appIndex);
   });
 
   it("server entry sets up Sentry Express error handler", () => {
     const content = fs.readFileSync(indexPath, "utf-8");
-    expect(content).toContain("Sentry.setupExpressErrorHandler(app)");
+    expect(fs.readFileSync(path.join(__dirname, "_core/app.ts"), "utf-8")).toContain("Sentry.setupExpressErrorHandler(app)");
   });
 });
 
