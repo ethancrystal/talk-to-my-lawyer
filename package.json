@@ -154,7 +154,7 @@
     "ignoredBuiltDependencies": []
   },
   "engines": {
-    "node": ">=22.12.0",
+    "node": "22.x",
     "pnpm": ">=10.4.1"
   }
 }
