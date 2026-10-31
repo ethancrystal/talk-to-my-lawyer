@@ -71,18 +71,24 @@ type PipelineRecord = {
   updated_at?: string;
 };
 
+// Letter statuses during which the draft is still being generated. Every
+// other non-failure status means generation already finished — including the
+// upsell / review / approval statuses a letter can reach within seconds when
+// the draft hold is short. Listing only the in-progress states (rather than the
+// done ones) keeps the modal from falling back to "all stages pending" when a
+// letter has already moved further along than it expected.
+const GENERATING_STATUSES = new Set(["submitted", "researching", "drafting"]);
+
+function isGenerationDone(status: string): boolean {
+  return !GENERATING_STATUSES.has(status) && status !== "pipeline_failed";
+}
+
 function normalizeStep(status: string, currentStep?: string): string {
+  if (isGenerationDone(status)) return "completed";
   if (currentStep && currentStep !== "pending") return currentStep;
   if (status === "submitted") return "pending";
   if (status === "researching") return "research";
   if (status === "drafting") return "draft";
-  if (
-    status === "ai_generation_completed_hidden" ||
-    status === "letter_released_to_subscriber" ||
-    status === "generated_locked"
-  ) {
-    return "completed";
-  }
   // Terminal failure: surface the stage it died at if known, else a generic
   // "failed" marker so getStageStatus can render an errored circle.
   if (status === "pipeline_failed") {
@@ -202,19 +208,20 @@ export default function PipelineProgressModal({
   const pipelineStatus =
     currentStatus === "pipeline_failed"
       ? "failed"
-      : pipelineRecord?.status ?? currentStatus;
+      : data?.letter != null && isGenerationDone(currentStatus)
+        ? "completed"
+        : pipelineRecord?.status ?? currentStatus;
   const currentStep = normalizeStep(currentStatus, pipelineRecord?.current_step);
   const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
-  const isReleasedToSubscriber = currentStatus === "letter_released_to_subscriber";
   const isReleasePending =
     subscriberDisplayStatus === "free_preview_waiting" ||
     currentStatus === "ai_generation_completed_hidden";
-  
-  const isComplete = [
-    "generated_locked",
-    "ai_generation_completed_hidden",
-    "letter_released_to_subscriber",
-  ].includes(currentStatus) || pipelineStatus === "completed";
+
+  const isComplete =
+    (data?.letter != null && isGenerationDone(currentStatus)) ||
+    pipelineStatus === "completed";
+  // Any finished letter that isn't still behind the draft hold can be opened.
+  const isReleasedToSubscriber = isComplete && !isReleasePending;
 
   const isFailed = pipelineStatus === "failed" || currentStatus === "pipeline_failed";
   
@@ -243,8 +250,10 @@ export default function PipelineProgressModal({
   useEffect(() => {
     if (open && isComplete && letterId && isReleasedToSubscriber) {
       const timer = setTimeout(() => {
-        navigate(`/letters/${letterId}`);
+        // Close first: the parent's onClose may navigate (SubmitLetter sends
+        // the user to /letters). Navigating last makes the letter page win.
         onClose();
+        navigate(`/letters/${letterId}`);
       }, 2000);
       return () => clearTimeout(timer);
     }

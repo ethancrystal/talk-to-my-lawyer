@@ -1,4 +1,5 @@
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+import { formatLetterDate } from "../../simple";
 import { createLogger } from "../../../logger";
 import { updateLetterStatus } from "../../../db";
 import { LETTER_STATUS } from "../../../../shared/types/letter";
@@ -103,6 +104,7 @@ Letter type: ${ctx.letterType}
 ${researchContext}${unverifiedWarning}${lessonsBlock}${redraftBlock}`;
 
   const userPrompt = `Draft a ${ctx.letterType} legal letter with:
+Letter date: ${formatLetterDate()} (use this exact date at the top of the letter)
 Subject: ${ctx.subject}
 Issue: ${ctx.description}
 Sender: ${ctx.senderName}${ctx.senderEmail ? ` <${ctx.senderEmail}>` : ""}
