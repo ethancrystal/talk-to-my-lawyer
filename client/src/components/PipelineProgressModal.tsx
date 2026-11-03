@@ -213,13 +213,16 @@ export default function PipelineProgressModal({
         : pipelineRecord?.status ?? currentStatus;
   const currentStep = normalizeStep(currentStatus, pipelineRecord?.current_step);
   const subscriberDisplayStatus = (data?.letter as any)?.subscriberDisplayStatus ?? currentStatus;
-  const isReleasePending =
-    subscriberDisplayStatus === "free_preview_waiting" ||
-    currentStatus === "ai_generation_completed_hidden";
-
   const isComplete =
     (data?.letter != null && isGenerationDone(currentStatus)) ||
     pipelineStatus === "completed";
+  // "Release pending" only makes sense once the draft exists. A free-preview
+  // letter reports free_preview_waiting from the start, so without the
+  // isComplete guard the modal says "Draft Generated" while still drafting.
+  const isReleasePending =
+    isComplete &&
+    (subscriberDisplayStatus === "free_preview_waiting" ||
+      currentStatus === "ai_generation_completed_hidden");
   // Any finished letter that isn't still behind the draft hold can be opened.
   const isReleasedToSubscriber = isComplete && !isReleasePending;
 
