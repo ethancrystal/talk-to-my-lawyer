@@ -40,18 +40,21 @@ const logger = createLogger({ module: "simple-pipeline" });
 // constructor), which breaks test files and couples unrelated modules to
 // AI env vars. Clients are memoized per process; keys are re-read from
 // process.env on first use.
+const LLM_TIMEOUT_MS = 75_000;
+
 let anthropicClient: Anthropic | null = null;
 function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
-      // The Vercel function is killed at 300s (vercel.json maxDuration). Bound
-      // each call so the worst case (2 attempts × 120s) still ends inside that
-      // window and the pipeline's own failure path runs (mark failed, refund the
-      // free slot) instead of the invocation being cut off mid-call. The SDK
-      // default is 10 minutes per attempt.
-      timeout: 120_000,
-      maxRetries: 1,
+      // A letter normally takes ~20s. One 75s attempt per provider, no SDK
+      // retry (the OpenAI fallback is the retry), keeps the worst case at
+      // ~150s: under the 3 minute product limit and well inside the 300s
+      // Vercel kill (vercel.json maxDuration), so the pipeline's own failure
+      // path runs (mark failed, refund the free slot) instead of the
+      // invocation being cut off mid-call. The SDK default is 10 minutes.
+      timeout: LLM_TIMEOUT_MS,
+      maxRetries: 0,
     });
   }
   return anthropicClient;
@@ -63,8 +66,8 @@ function getOpenAiClient(): OpenAI {
     openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       // Same budget as the Anthropic client above.
-      timeout: 120_000,
-      maxRetries: 1,
+      timeout: LLM_TIMEOUT_MS,
+      maxRetries: 0,
     });
   }
   return openaiClient;
@@ -176,6 +179,19 @@ Output only the letter content, ready to send.`;
  * a 5-minute window hit the cache and pay reduced input token costs.
  */
 async function generateLetter(prompt: string): Promise<GenerationResult> {
+  const edge = getEdgeConfig();
+  if (edge) {
+    try {
+      return await generateWithEdgeFunction(edge, prompt);
+    } catch (edgeErr) {
+      logger.warn(
+        { err: getErrorMessage(edgeErr) },
+        "[Simple] Edge function failed, falling back to OpenAI"
+      );
+      return generateWithOpenAi(prompt);
+    }
+  }
+
   try {
     const message = await getAnthropicClient().messages.create({
       model: CLAUDE_MODEL,
@@ -213,28 +229,87 @@ async function generateLetter(prompt: string): Promise<GenerationResult> {
       { err: getErrorMessage(claudeErr) },
       "[Simple] Claude failed, falling back to OpenAI"
     );
-
-    const completion = await getOpenAiClient().chat.completions.create({
-      model: OPENAI_MODEL,
-      max_tokens: 4096,
-      messages: [
-        { role: "system", content: SIMPLE_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ],
-    });
-
-    const content = completion.choices[0]?.message?.content ?? "";
-
-    return {
-      content,
-      provider: "openai",
-      model: OPENAI_MODEL,
-      usage: {
-        inputTokens: completion.usage?.prompt_tokens,
-        outputTokens: completion.usage?.completion_tokens,
-      },
-    };
+    return generateWithOpenAi(prompt);
   }
+}
+
+async function generateWithOpenAi(prompt: string): Promise<GenerationResult> {
+  const completion = await getOpenAiClient().chat.completions.create({
+    model: OPENAI_MODEL,
+    max_tokens: 4096,
+    messages: [
+      { role: "system", content: SIMPLE_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content ?? "";
+
+  return {
+    content,
+    provider: "openai",
+    model: OPENAI_MODEL,
+    usage: {
+      inputTokens: completion.usage?.prompt_tokens,
+      outputTokens: completion.usage?.completion_tokens,
+    },
+  };
+}
+
+// Optional: run the Claude call in the Supabase edge function `claude-letter`
+// (supabase/functions/claude-letter) so the Anthropic key and the long call
+// live on Supabase. Enabled only when BOTH env vars are set; otherwise the
+// app calls Anthropic directly as before. The edge function aborts its own
+// Claude request at 100s, so edge (100s) + OpenAI fallback (75s) stays under
+// the 3 minute budget.
+const EDGE_TIMEOUT_MS = 100_000;
+
+function getEdgeConfig(): { url: string; token: string } | null {
+  const url = process.env.LETTER_EDGE_URL;
+  const token = process.env.LETTER_EDGE_TOKEN;
+  return url && token ? { url, token } : null;
+}
+
+async function generateWithEdgeFunction(
+  edge: { url: string; token: string },
+  prompt: string
+): Promise<GenerationResult> {
+  const res = await fetch(edge.url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${edge.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ system: SIMPLE_SYSTEM_PROMPT, prompt }),
+    signal: AbortSignal.timeout(EDGE_TIMEOUT_MS),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.content) {
+    throw new Error(`Edge function ${res.status}: ${data?.error ?? "no content"}`);
+  }
+
+  logger.info(
+    {
+      cacheCreation: data.usage?.cache_creation_input_tokens,
+      cacheRead: data.usage?.cache_read_input_tokens,
+    },
+    "[Simple] Claude (edge function) prompt cache stats"
+  );
+
+  return {
+    content: data.content,
+    provider: "anthropic",
+    model: data.model ?? CLAUDE_MODEL,
+    usage: {
+      inputTokens: data.usage?.input_tokens,
+      outputTokens: data.usage?.output_tokens,
+    },
+    metadata: {
+      viaEdgeFunction: true,
+      cacheCreationTokens: data.usage?.cache_creation_input_tokens,
+      cacheReadTokens: data.usage?.cache_read_input_tokens,
+    },
+  };
 }
 
 async function generateInitialDraftWithGemini(
@@ -396,6 +471,63 @@ export function formatLetterDate(now: Date = new Date()): string {
   });
 }
 
+/** "2026-11-20" -> "November 20, 2026"; anything unparseable is passed through. */
+export function formatIsoDate(iso: string): string {
+  const parsed = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/** "orderNumber" -> "Order Number" */
+function humanizeKey(key: string): string {
+  const spaced = key
+    .split("")
+    .map((ch, i) => (i > 0 && ch >= "A" && ch <= "Z" ? ` ${ch}` : ch))
+    .join("");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Intake fields the form collects beyond the description: amount, incident
+ * date, response deadline, type-specific fields and exhibits. Each line is
+ * only emitted when the user filled the field in.
+ */
+function buildExtraFacts(intake: IntakeJson): string {
+  const lines: string[] = [];
+  if (intake.matter?.incidentDate) {
+    lines.push(`**Incident Date:** ${formatIsoDate(intake.matter.incidentDate)}`);
+  }
+  if (intake.financials?.amountOwed != null) {
+    lines.push(
+      `**Amount in Dispute:** ${intake.financials.currency || "USD"} ${intake.financials.amountOwed}`
+    );
+  }
+  if (intake.deadlineDate) {
+    lines.push(
+      `**Response Deadline:** ${formatIsoDate(intake.deadlineDate)} (state this exact date as the deadline in the letter)`
+    );
+  }
+  const details = Object.entries(intake.situationFields ?? {}).filter(
+    ([, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+  );
+  if (details.length > 0) {
+    lines.push(
+      `**Case Details:**\n${details.map(([k, v]) => `- ${humanizeKey(k)}: ${v}`).join("\n")}`
+    );
+  }
+  const exhibits = (intake.exhibits ?? []).filter(e => e.description);
+  if (exhibits.length > 0) {
+    lines.push(
+      `**Exhibits Available:**\n${exhibits.map(e => `- ${e.label}: ${e.description}`).join("\n")}`
+    );
+  }
+  return lines.length > 0 ? `${lines.join("\n")}\n\n` : "";
+}
+
 export function buildPrompt(intake: IntakeJson, now: Date = new Date()): string {
   const {
     matter,
@@ -413,7 +545,7 @@ export function buildPrompt(intake: IntakeJson, now: Date = new Date()): string 
 **Letter Type:** ${intake.letterType || matter?.category || "general-legal"}
 **Subject:** ${matter?.subject || "N/A"}
 **Description:** ${matter?.description || "N/A"}
-
+${buildExtraFacts(intake)}
 **Jurisdiction:** ${jurisdiction?.state || jurisdiction?.country || "General"}
 
 **From (Sender):**
