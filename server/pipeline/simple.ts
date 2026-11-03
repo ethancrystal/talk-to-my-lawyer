@@ -5,6 +5,7 @@ import { OpenAI } from "openai";
 import { withRawCacheControl } from "./providers";
 import { effectiveTone, getLetterTypeProfile } from "./letter-type-profiles";
 import { findUngroundedFigures } from "./grounding";
+import { saveDraftToStorage } from "./draft-storage";
 import {
   updateLetterStatus,
   createLetterVersion,
@@ -128,7 +129,7 @@ Every sentence of the letter must be supported by something inside <letter_reque
 - Do NOT invent or add: facts, events, motives, damages, injuries, interest, fees, deadlines the sender did not give (beyond the default in BODY), people, companies, or documents.
 - Do NOT state or describe any law, statute, regulation, legal standard, legal right, notice period or legal duty, unless the sender's own text states it. If the sender states one, present it as the sender's own statement ("I understand that..."), not as verified law. Never write phrases like "under California law" on your own.
 - Do NOT draw conclusions the facts do not state. Describe what happened in neutral words: "I have not received a response" (only if the sender said so), not "ignored"; "stopped working", not "defective" or "faulty", unless the sender used that word. No adjectives that add accusation (negligent, deceptive, unreasonable, bad faith).
-- Do NOT compute anything the sender did not provide: no day counts ("more than 21 days have passed"), no totals, no interest, no late fees, no dates other than the ones given and the deadline.
+- Do NOT compute anything the sender did not provide: no day counts ("more than 21 days have passed"), no elapsed-time phrases ("less than a month", "within weeks", "shortly after", "only days later"), no totals, no interest, no late fees, no dates other than the ones given and the deadline. State the dates and let the reader see the gap.
 - Do NOT name specific consequences, agencies, courts, remedies or recoveries unless the sender named them in <desired_outcome> or <additional_context>.
 - If a detail the letter needs is missing (for example the recipient's address or an account number), write a clear bracketed placeholder such as "[INSERT RECIPIENT ADDRESS]". Never guess it. The letter date is always provided; never use a placeholder for it.
 
@@ -714,6 +715,9 @@ export async function runSimplePipeline(
     await updateLetterVersionPointers(letterId, {
       currentAiDraftVersionId: version.insertId,
     });
+
+    // Durable plain-text copy in Supabase Storage (never throws).
+    await saveDraftToStorage(letterId, version.insertId, result.content);
 
     const isPreviewGated = await isLetterPreviewGated(letterId);
     await finalizeDraftPreviewStatus(letterId, isPreviewGated);
