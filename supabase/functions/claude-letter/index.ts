@@ -13,7 +13,10 @@
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-5-20250929";
-const MAX_TOKENS = 4096;
+// A finished letter is ~300-600 words; the cap bounds latency and cost.
+const MAX_TOKENS = 2000;
+// Low temperature keeps the draft close to the supplied facts.
+const TEMPERATURE = 0.2;
 // Supabase edge requests are cut at 150s; stay well inside, and inside the
 // app's 3 minute generation budget.
 const CLAUDE_TIMEOUT_MS = 100_000;
@@ -72,6 +75,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
         // Same ephemeral cache tag the app uses, so repeated letters within
         // 5 minutes read the cached system prompt at ~10% of the price.
         system: system
