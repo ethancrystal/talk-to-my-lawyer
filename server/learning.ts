@@ -11,6 +11,7 @@ import {
   getAverageQualityScoreForScope,
 } from "./db";
 import type { InsertPipelineLesson, PipelineLesson } from "../drizzle/schema";
+import { anthropicWorkspaceHeaders } from "./_core/anthropicHeaders";
 
 type LetterType = InsertPipelineLesson["letterType"];
 type LessonCategory = InsertPipelineLesson["category"];
@@ -58,7 +59,7 @@ async function categorizeFromNote(note: string): Promise<NonNullable<LessonCateg
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return categorizeFromNoteKeyword(note);
 
-    const anthropic = createAnthropic({ apiKey });
+    const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
     const categoryList = Object.entries(CATEGORY_DEFINITIONS)
       .map(([key, desc]) => `- ${key}: ${desc}`)
       .join("\n");
@@ -100,7 +101,7 @@ async function checkForDuplicateAndMerge(
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return false;
 
-    const anthropic = createAnthropic({ apiKey });
+    const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
     const existingList = existing
       .slice(0, 15)
       .map((l, i) => `[ID:${l.id}] ${l.lessonText}`)
@@ -466,7 +467,7 @@ export async function consolidateLessonsForScope(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY required for consolidation");
 
-  const anthropic = createAnthropic({ apiKey });
+  const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
   const lessonList = lessons.map((l) => `[ID:${l.id}] [${l.category}] ${l.lessonText}`).join("\n");
 
   const result = await generateText({

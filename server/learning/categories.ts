@@ -3,6 +3,7 @@
  */
 import type { InsertPipelineLesson } from "../../drizzle/schema";
 import { logger } from "../logger";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 export type LessonCategory = InsertPipelineLesson["category"];
 
@@ -97,7 +98,7 @@ export async function categorizeFromNote(
     const { generateText } = await import("ai");
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return categorizeFromNoteKeyword(note);
-    const anthropic = createAnthropic({ apiKey });
+    const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
     const categoryList = Object.entries(CATEGORY_DEFINITIONS)
       .map(([key, desc]) => `- ${key}: ${desc}`)
       .join("\n");

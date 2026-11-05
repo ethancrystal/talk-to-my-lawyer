@@ -7,6 +7,7 @@ import { ENV } from "./_core/env";
 import { captureServerException } from "./sentry";
 import { logger } from "./logger";
 import { getBoss, QUEUE_NAME, isQueueConnectionConfigured } from "./queue";
+import { anthropicWorkspaceHeaders } from "./_core/anthropicHeaders";
 
 export type ServiceStatus = "ok" | "error" | "unconfigured";
 
@@ -114,7 +115,7 @@ async function checkResend(): Promise<ServiceCheckResult> {
   });
 }
 
-async function checkAnthropic(): Promise<ServiceCheckResult> {
+export async function checkAnthropic(): Promise<ServiceCheckResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return { status: "unconfigured", responseTimeMs: 0 };
@@ -125,6 +126,7 @@ async function checkAnthropic(): Promise<ServiceCheckResult> {
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        ...anthropicWorkspaceHeaders(),
       },
       signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
     });

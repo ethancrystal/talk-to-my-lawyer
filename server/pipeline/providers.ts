@@ -4,6 +4,7 @@ import { generateText, type ToolSet } from "ai";
 import OpenAI from "openai";
 import type { TokenUsage } from "../../shared/types";
 import { logger } from "../logger";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 // ═══════════════════════════════════════════════════════
 // MODEL PROVIDERS
@@ -17,7 +18,7 @@ export function getAnthropicClient() {
       "[Pipeline] ANTHROPIC_API_KEY is not set — cannot run drafting or assembly stages"
     );
   }
-  return createAnthropic({ apiKey });
+  return createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
 }
 
 // ── Prompt caching helpers ──────────────────────────────────────────────────

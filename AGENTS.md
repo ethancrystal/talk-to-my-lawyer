@@ -408,6 +408,7 @@ All env vars are accessed through `server/_core/env.ts` → `ENV` object. Requir
 | `STRIPE_SECRET_KEY` | Stripe API secret |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `ANTHROPIC_API_KEY` | Claude API (drafting, assembly, vetting) |
+| `ANTHROPIC_WORKSPACE_ID` | Optional. Sent as the `anthropic-workspace-id` header on every Anthropic call (required for workspace-wide keys). Server-only; see `server/_core/anthropicHeaders.ts` |
 | `RESEND_API_KEY` | Transactional email |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` | Cloudflare R2 file storage |
 

@@ -12,6 +12,8 @@ export const ENV = {
   // same value it would with a snapshot — process.env is set once at
   // startup via dotenv.
   get anthropicApiKey() { return process.env.ANTHROPIC_API_KEY ?? ""; },
+  // Sent as the `anthropic-workspace-id` header; required for workspace-wide keys.
+  get anthropicWorkspaceId() { return process.env.ANTHROPIC_WORKSPACE_ID ?? ""; },
   get openAiApiKey() { return process.env.OPENAI_API_KEY ?? ""; },
   get perplexityApiKey() { return process.env.PERPLEXITY_API_KEY ?? ""; },
   // Google Gemini — dormant in the LangGraph failover chain but plumbed for future re-enable
