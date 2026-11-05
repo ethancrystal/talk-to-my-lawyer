@@ -19,6 +19,7 @@ import type { InsertPipelineLesson } from "../../drizzle/schema";
 import { logger } from "../logger";
 import { computeWordLevelEditDistance } from "./dedup";
 import type { LessonCategory } from "./categories";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 type LetterType = InsertPipelineLesson["letterType"];
 
@@ -170,7 +171,7 @@ export async function consolidateLessonsForScope(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY required for consolidation");
 
-  const anthropic = createAnthropic({ apiKey });
+  const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
   const lessonList = lessons
     .map((l) => `[ID:${l.id}] [${l.category}] ${l.lessonText}`)
     .join("\n");

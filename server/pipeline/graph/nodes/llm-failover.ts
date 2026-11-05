@@ -4,6 +4,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 import { SystemMessage } from "@langchain/core/messages";
 import { createLogger } from "../../../logger";
 import { ENV } from "../../../_core/env";
+import { anthropicWorkspaceHeaders } from "../../../_core/anthropicHeaders";
 
 // ═══════════════════════════════════════════════════════
 // Shared OpenAI-primary / Anthropic-fallback failover helper for
@@ -285,12 +286,18 @@ async function callAnthropic(opts: LlmCallOptions): Promise<LlmCallResult> {
   // pipeline's canonical Anthropic models even when routed via this helper.
   const model = opts.anthropicModel ?? MODELS[tier].anthropic;
   const gatewayUrl = getGatewayBaseUrl("anthropic");
+  // Only set clientOptions when a workspace id is configured, so keys scoped
+  // to a single workspace keep their existing behavior.
+  const workspaceHeaders = anthropicWorkspaceHeaders();
   const llm = new ChatAnthropic({
     apiKey,
     model,
     maxTokens: opts.maxTokens,
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(gatewayUrl ? { anthropicApiUrl: gatewayUrl } : {}),
+    ...(Object.keys(workspaceHeaders).length > 0
+      ? { clientOptions: { defaultHeaders: workspaceHeaders } }
+      : {}),
   });
   const result = await llm.invoke(opts.messages, {
     signal: AbortSignal.timeout(opts.timeoutMs),

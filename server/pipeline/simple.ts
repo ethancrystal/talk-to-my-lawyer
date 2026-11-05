@@ -20,6 +20,7 @@ import {
   finalizeDraftPreviewStatus,
   isLetterPreviewGated,
 } from "./preview-gate";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 const logger = createLogger({ module: "simple-pipeline" });
 
@@ -57,6 +58,7 @@ function getAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
+      defaultHeaders: anthropicWorkspaceHeaders(),
       // A letter normally takes ~20s. One 75s attempt per provider, no SDK
       // retry (the OpenAI fallback is the retry), keeps the worst case at
       // ~150s: under the 3 minute product limit and well inside the 300s

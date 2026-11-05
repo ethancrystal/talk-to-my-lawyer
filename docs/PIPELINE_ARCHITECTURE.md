@@ -258,6 +258,7 @@ Legacy pgEnum-only values (not part of the active state machine):
 | Variable                   | Required    | Purpose                                                                       |
 | -------------------------- | ----------- | ----------------------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`        | **Yes**     | Stages 2, 3 + 4 (always required)                                             |
+| `ANTHROPIC_WORKSPACE_ID`   | No          | Workspace-wide keys only; sent as `anthropic-workspace-id` on every Anthropic call |
 | `OPENAI_API_KEY`           | **Yes**     | Stage 1 research (primary, gpt-4o-search-preview with web search)             |
 | `PERPLEXITY_API_KEY`       | Optional    | Stage 1 research failover (sonar-pro); skipped if missing                     |
 | `UPSTASH_REDIS_REST_URL`   | Recommended | Rate limiter (`@upstash/ratelimit`) — fail-open if absent                     |

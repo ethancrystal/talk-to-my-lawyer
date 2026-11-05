@@ -92,6 +92,7 @@ This is the source of truth. Both `.env` (dev) and Railway service env (prod) ge
 | `STRIPE_SECRET_KEY` | Stripe → Developers → API keys → Secret | `sk_live_...` for prod |
 | `STRIPE_WEBHOOK_SECRET` | Stripe → Webhooks → endpoint → Signing secret | After creating webhook (§5d) |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys | `sk-ant-...` |
+| `ANTHROPIC_WORKSPACE_ID` | console.anthropic.com → Workspaces (only if the key is workspace-wide) | `wrkspc_...` |
 | `RESEND_API_KEY` | resend.com → API Keys | `re_...`. Tied to verified domain (§3b) |
 | `R2_ACCOUNT_ID` | Cloudflare → R2 → API → Account ID |  |
 | `R2_ACCESS_KEY_ID` | Cloudflare → R2 → API → Manage R2 API tokens → Create | Scope: Object R/W on the bucket |
@@ -237,6 +238,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...   # use `stripe listen --print-secret` from Stri
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_WORKSPACE_ID=wrkspc_...   # only for workspace-wide keys
 OPENAI_API_KEY=sk-...
 PERPLEXITY_API_KEY=pplx-...
 

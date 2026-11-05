@@ -24,6 +24,7 @@ import {
   createCheckoutSession,
   createLetterUnlockCheckout,
 } from "../stripe/checkouts";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 // ─── Constants and Types ───────────────────────────────────────────────────
 
@@ -249,7 +250,10 @@ export async function executeLetterGenerationProcedure(
   await updateLetterStatus(requestId, "researching");
   await updateLetterStatus(requestId, "drafting");
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultHeaders: anthropicWorkspaceHeaders(),
+  });
   const prompt = _buildClaudePrompt(request.intakeJson as IntakeJson);
 
   const message = await anthropic.messages.create({

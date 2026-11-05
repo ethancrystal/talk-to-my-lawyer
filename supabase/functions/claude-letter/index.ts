@@ -5,8 +5,10 @@
 // key and the long-running call live on Supabase.
 //
 // Secrets (Supabase dashboard -> Edge Functions -> Secrets):
-//   ANTHROPIC_API_KEY   the Anthropic key
-//   LETTER_EDGE_TOKEN   shared bearer token, same value as the app's env var
+//   ANTHROPIC_API_KEY       the Anthropic key
+//   ANTHROPIC_WORKSPACE_ID  workspace id (wrkspc_...), only needed when the key is
+//                           workspace-wide; sent as the anthropic-workspace-id header
+//   LETTER_EDGE_TOKEN       shared bearer token, same value as the app's env var
 //
 // Deployed with verify_jwt=false because it authenticates with
 // LETTER_EDGE_TOKEN itself.
@@ -45,6 +47,7 @@ Deno.serve(async (req: Request) => {
 
   const expected = Deno.env.get("LETTER_EDGE_TOKEN");
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const workspaceId = (Deno.env.get("ANTHROPIC_WORKSPACE_ID") ?? "").trim();
   if (!expected || !apiKey) {
     return json({ error: "Function not configured" }, 503);
   }
@@ -70,6 +73,7 @@ Deno.serve(async (req: Request) => {
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        ...(workspaceId ? { "anthropic-workspace-id": workspaceId } : {}),
         "content-type": "application/json",
       },
       body: JSON.stringify({

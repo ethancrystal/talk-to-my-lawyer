@@ -9,6 +9,7 @@ import {
 } from "../db";
 import type { InsertPipelineLesson } from "../../drizzle/schema";
 import { logger } from "../logger";
+import { anthropicWorkspaceHeaders } from "../_core/anthropicHeaders";
 
 /**
  * Computes word-level edit distance between two strings as a percentage (0-100).
@@ -51,7 +52,7 @@ export async function checkForDuplicateAndMerge(
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return false;
 
-    const anthropic = createAnthropic({ apiKey });
+    const anthropic = createAnthropic({ apiKey, headers: anthropicWorkspaceHeaders() });
     const existingList = existing
       .slice(0, 15)
       .map((l) => `[ID:${l.id}] ${l.lessonText}`)
