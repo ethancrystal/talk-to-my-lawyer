@@ -7,6 +7,7 @@ import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import WebMCPTools from "./components/WebMCPTools";
 
 function lazyRetry(importFn: () => Promise<any>) {
   return lazy(() =>
@@ -121,7 +122,9 @@ const ServiceRoute = lazyRetry(() => import("./pages/services/ServiceRoute"));
 
 function Router() {
   return (
-    <Switch>
+    <>
+      <WebMCPTools />
+      <Switch>
       {/* ═══ Public ═══ */}
       <Route path="/" component={Home} />
       <Route path="/pricing">
@@ -490,7 +493,8 @@ function Router() {
       {/* ═══ Fallback ═══ */}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
-    </Switch>
+      </Switch>
+    </>
   );
 }
 
