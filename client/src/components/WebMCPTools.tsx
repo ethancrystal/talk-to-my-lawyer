@@ -32,14 +32,19 @@ const SERVICE_INPUT_SCHEMA = {
 const READ_ONLY = { readOnlyHint: true } as const;
 
 function isPublicMarketingRoute(path: string): boolean {
-  const normalizedPath = path.length > 1 ? path.replace(/\\/+$/, "") : path;
+  const normalizedPath =
+    path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+
+  const isServiceDetail =
+    normalizedPath.startsWith("/services/") &&
+    normalizedPath.split("/").length === 3;
 
   return (
     normalizedPath === "/" ||
     normalizedPath === "/services" ||
     normalizedPath === "/pricing" ||
     normalizedPath === "/faq" ||
-    /^\\/services\\/[^/]+$/.test(normalizedPath)
+    isServiceDetail
   );
 }
 
