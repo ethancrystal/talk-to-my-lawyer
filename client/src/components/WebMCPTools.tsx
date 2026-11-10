@@ -35,9 +35,13 @@ function isPublicMarketingRoute(path: string): boolean {
   const normalizedPath =
     path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
 
+  const serviceSlug = normalizedPath.startsWith("/services/")
+    ? normalizedPath.slice("/services/".length)
+    : "";
   const isServiceDetail =
-    normalizedPath.startsWith("/services/") &&
-    normalizedPath.split("/").length === 3;
+    serviceSlug.length > 0 &&
+    !serviceSlug.includes("/") &&
+    SERVICE_SLUGS.includes(serviceSlug);
 
   return (
     normalizedPath === "/" ||
@@ -96,6 +100,7 @@ export default function WebMCPTools() {
         summary: service.heroDescription,
         url: `https://www.talk-to-my-lawyer.com/services/${service.slug}`,
       })),
+      note: "Service summaries are general descriptions, not an assessment of a specific legal matter.",
     }),
   });
 
@@ -108,7 +113,10 @@ export default function WebMCPTools() {
     enabled,
     execute: ({ slug }) => {
       if (typeof slug !== "string") {
-        return { error: "A service slug is required.", availableSlugs: SERVICE_SLUGS };
+        return {
+          error: "A service slug is required.",
+          availableSlugs: SERVICE_SLUGS,
+        };
       }
 
       const service = getServiceBySlug(slug);
@@ -126,7 +134,8 @@ export default function WebMCPTools() {
         summary: service.heroDescription,
         description: service.metaDescription,
         url: `https://www.talk-to-my-lawyer.com/services/${service.slug}`,
-        note: "This is a general service description, not an assessment of a specific legal matter.",
+        note:
+          "This is a general service description, not an assessment of a specific legal matter.",
       };
     },
   });
